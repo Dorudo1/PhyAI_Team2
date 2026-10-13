@@ -1,0 +1,81 @@
+{
+  "table_size": [
+    0.84,
+    0.54
+  ],
+  "table_gap": 0.001,
+  "table_height": 0.75,
+  "table_thickness": 0.025,
+  "post_radius": 0.04,
+  "post_position": [
+    0.1,
+    -0.08
+  ],
+  "robot_yaw_degrees": 145,
+  "overhead_position": [
+    -0.1,
+    0.08,
+    0.89
+  ],
+  "camera_fovy": 54,
+  "wrist_camera_position": [
+    0.02,
+    0.02,
+    0.0
+  ],
+  "wrist_camera_quaternion": [
+    0.5,
+    0.5,
+    0.5,
+    -0.5
+  ],
+  "wrist_camera_roll_degrees": 0,
+  "wrist_camera_mount_position": [
+    0.035,
+    -0.16,
+    0.0
+  ],
+  "wrist_camera_mount_quaternion": [
+    1,
+    0,
+    0,
+    0
+  ],
+  "block_size": [
+    0.075,
+    0.025,
+    0.015
+  ],
+  "block_mass": 0.02,
+  "block_friction": [
+    0.8,
+    0.005,
+    0.0001
+  ],
+  "block_positions": [
+    [
+      0.4,
+      -0.25
+    ],
+    [
+      0.53,
+      -0.25
+    ],
+    [
+      0.4,
+      -0.33
+    ],
+    [
+      0.53,
+      -0.33
+    ],
+    [
+      0.4,
+      -0.41
+    ],
+    [
+      0.53,
+      -0.41
+    ]
+  ]
+}

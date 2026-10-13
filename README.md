@@ -89,6 +89,7 @@ Your app publishes targets; the simulator or control PC bridge receives them and
 | Camera topics *(TBD)* | `sensor_msgs/Image`, `CameraInfo` | host → app |
 | `/tf`, `/tf_static` | `tf2_msgs/TFMessage` | host → app |
 | `/robot_description` | `std_msgs/String` (URDF) | host → app |
+| `/sim/scene` *(simulator only)* | `std_msgs/String`: JSON block poses, robot kinematics, simulation time, pause state, restart ID | simulator → example |
 
 The host stack administrator confirms provisional topics and camera names. Arm commands currently
 follow the `piper_ros` convention. If the bridge uses custom messages, add their package to the base image.
@@ -133,7 +134,8 @@ The host owns all hardware. Apps use ROS topics and have no device access. Runti
 
 **How:** Run the test script inside the devcontainer, then open the browser URL.
 
-**Expected result:** The example arm moves continuously and the terminal prints joint feedback.
+**Expected result:** The example picks one reachable block, lifts it, releases it above
+the table, and returns home. The terminal reports the stages and verified outcome.
 
 ```bash
 cd ~/ws/src/PhyAI_Team2
@@ -155,7 +157,14 @@ bash scripts/test_sim.sh          # select from a menu
 The script builds the selected app and simulator, starts or reuses MuJoCo, then runs
 `apps/<name>/start.sh`. Your app controls motion through the [robot interface](#robot-interface).
 [example.py](apps/example/example_app/example_app/example.py) sends smooth arm/gripper targets at
-50 Hz and reports feedback once a second. `sim_cmd.sh` is optional for manual commands.
+50 Hz for a fixed pick-and-drop sequence using the verified joint waypoints in
+[pick_drop.py](apps/example/example_app/example_app/pick_drop.py). The known layout uses
+`block_3` at (0.40, -0.33) m, 7.5 × 2.5 × 1.5 cm blocks, and the original base pose.
+It uses `/sim/scene` to verify the lift and landing; there is no runtime IK search.
+Scene-editor pauses also pause the sequence. **Restart simulation** in either browser
+page restores the arm and blocks and reruns the example without restarting its process.
+Restart keeps active scene settings and does not save or reload the JSON file.
+`sim_cmd.sh` is optional for manual commands.
 
 ### Browser access
 
@@ -166,8 +175,79 @@ The script builds the selected app and simulator, starts or reuses MuJoCo, then 
 | Through SSH | Forward the port in VS Code's **Ports** panel, then use `http://localhost:23517` |
 
 Use the printed URL if you set another port. Rendering uses offscreen GPU/EGL and streams video;
-no desktop display is needed. The simulator is development-only; cameras and `/tf` are not simulated yet.
+no desktop display is needed. The simulator is development-only. The browser includes virtual camera views; ROS camera topics and `/tf` are not published yet.
 Its model comes from [MuJoCo Menagerie](https://github.com/google-deepmind/mujoco_menagerie/tree/main/agilex_piper).
+
+### Lab scene and camera views
+
+The default scene contains four 84 × 54 cm black tabletops in a 2 × 2 layout,
+a PIPER arm mounted near the combined table center, and six movable 7.5 × 2.5 × 1.5 cm blocks.
+Open the browser and select **Overview**, **Overhead camera**, or **Wrist camera**.
+The overview includes an X/Y/Z orientation gizmo; the overhead view shows X/Y.
+The arrows indicate positive world directions: X red, Y green, and Z blue.
+The overhead lens is 89 cm above the tabletop, looking straight down from
+X = -3 cm and Y = +2 cm relative to the combined table center. The wrist camera follows `link6`.
+These are ideal RGB browser views, not an SR305 sensor/noise simulation or ROS RGB-D streams.
+
+Edit [lab_scene.json](sim/piper_mujoco_sim/config/lab_scene.json) to adjust the layout.
+All distances are in meters. The world origin is the combined tabletop center; +Z points up,
++X follows the 168 cm dimension, and +Y follows the 108 cm dimension.
+The robot base and post center are at X = +3 cm and Y = -2 cm relative to that origin,
+configured by `post_position`. The overhead lens uses `overhead_position` in the same frame.
+The 1 mm gap, 75 cm table height, 4 cm post radius, robot heading, 20 g block mass,
+friction, and exact wrist pose are initial estimates.
+The camera assembly is rigidly attached to the arm casing (`link5`), before the rotating
+`joint6`. Mount coordinates use `gripper_root_mount`, a reference frame aligned with
+the gripper root at zero wrist roll and fixed to that casing. Its +X is opposite
+zero-roll `link6` +X. `wrist_camera_mount_position` and `wrist_camera_mount_quaternion` move
+and rotate the whole assembly, including its pad, housing, and lens.
+`wrist_camera_position` and `wrist_camera_quaternion` set the camera lens pose relative
+to that mount (meters and `[w, x, y, z]`);
+they do not change the robot's wrist pose or joint positions.
+The silver camera bar spans perpendicular to the arm and attaches directly to the
+wrist casing through a thin pad, with no post. The hierarchy is
+`link5` → `wrist_mount_reference` → `gripper_root_mount` → `wrist_camera_mount`
+→ `wrist_camera_body` → `wrist` camera. The camera follows the casing exactly as
+the arm moves; gripper roll and finger opening do not move it relative to the casing.
+Housing dimensions are approximate. The lens looks parallel to the gripper's forward
+direction (gripper-root +Y, or `link6` +Z), rather than converging on the fingers,
+and the camera looks along its own -Z. `wrist_camera_roll_degrees` adjusts optical roll
+independently of the housing; the default is 0 because the mount frame now has
+image-up toward gripper-root +X and the bar width along gripper-root Z. Negative roll rotates
+the image counterclockwise.
+The leader arm is omitted.
+
+The default browser page (`/`) is a read-only viewer. Open `/edit` explicitly for the
+**Scene editor**, or launch with `scene_editing:=true` to show the editor at `/` too:
+
+```bash
+ros2 launch piper_mujoco_sim sim.launch.py scene_editing:=true
+# Or, when starting a new simulator through the helper:
+SCENE_EDITING=true bash scripts/test_sim.sh
+```
+
+The helper prints both URLs; a reused simulator keeps its existing homepage mode.
+Editing APIs are confined to `/edit/scene`; viewing `/` does not activate editing for other viewers.
+The editor supports the arm base, camera mount, camera lens,
+overhead camera, field of view, and blocks. Positions use centimeters and rotations use
+degrees, with the parent frame shown beside each object. Preview applies edits live and
+pauses physics and incoming arm commands; **Resume simulation** continues motion.
+**Revert** restores the last saved layout, **Save scene** writes the configured JSON file,
+and **Reload scene file** loads pose edits made in your text editor. Custom MJCF models are view-only.
+Table dimensions and other structural settings still require a restart after manual editing.
+
+Restart the simulator after manually editing structural scene settings. An already running simulator reused by
+`test_sim.sh` keeps its old scene until stopped. To inspect without the example app moving the arm:
+
+```bash
+cd ~/ws
+colcon build --symlink-install --packages-select piper_mujoco_sim
+source install/setup.bash
+ROS_DOMAIN_ID=42 ros2 launch piper_mujoco_sim sim.launch.py
+```
+
+A different configuration can be selected with `scene_config:=/absolute/path/config.json`.
+To load an existing MJCF instead, use `model_path:=/absolute/path/scene.xml`.
 
 ### ROS domain, port, and existing servers
 

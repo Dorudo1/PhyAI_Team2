@@ -89,6 +89,7 @@ apps/<name>/
 | 카메라 토픽 *(미정)* | `sensor_msgs/Image`, `CameraInfo` | 호스트 → 앱 |
 | `/tf`, `/tf_static` | `tf2_msgs/TFMessage` | 호스트 → 앱 |
 | `/robot_description` | `std_msgs/String` (URDF) | 호스트 → 앱 |
+| `/sim/scene` *(시뮬레이터 전용)* | `std_msgs/String`: 블록 위치, 로봇 운동학, 시뮬레이션 시간, 일시 정지 상태와 재시작 ID의 JSON | 시뮬레이터 → example |
 
 임시 토픽과 카메라 이름은 호스트 스택 담당자가 확정합니다. 팔 명령은 현재 `piper_ros` 규칙을 따릅니다.
 브리지가 커스텀 메시지를 사용하면 해당 패키지를 base 이미지에 추가해야 합니다.
@@ -134,7 +135,8 @@ ROS가 실행 파일을 찾도록 `setup.cfg`와 `resource/<your_pkg>`를 유지
 
 **방법:** devcontainer에서 테스트 스크립트를 실행하고 브라우저 URL을 엽니다.
 
-**예상 결과:** example 팔이 계속 움직이고 터미널에 관절 상태가 출력됩니다.
+**예상 결과:** example이 도달 가능한 블록 하나를 집어 들어 올린 뒤 테이블 위에서 놓고
+홈 자세로 돌아옵니다. 터미널에 단계와 검증 결과를 출력합니다.
 
 ```bash
 cd ~/ws/src/PhyAI_Team2
@@ -156,7 +158,12 @@ bash scripts/test_sim.sh          # 메뉴에서 선택
 스크립트는 선택한 앱과 시뮬레이터를 빌드하고, MuJoCo를 시작하거나 재사용한 뒤
 `apps/<name>/start.sh`를 실행합니다. 앱은 [로봇 인터페이스](#로봇-인터페이스)로 동작을 제어합니다.
 [example.py](apps/example/example_app/example_app/example.py)는 50 Hz로 부드러운 팔·그리퍼 목표값을
-보내고 1초마다 상태를 출력합니다. `sim_cmd.sh`는 수동 명령이 필요할 때만 사용합니다.
+보내 고정 집기·낙하 시나리오를 실행합니다. [pick_drop.py](apps/example/example_app/example_app/pick_drop.py)의
+검증된 관절 경유점을 사용하며 런타임 IK 탐색은 하지 않습니다. 알려진 배치의 `block_3` 위치는
+(0.40, -0.33) m, 블록 크기는 7.5 × 2.5 × 1.5 cm이며 팔 베이스는 원래 자세를 사용합니다.
+`/sim/scene`으로 실제 들어 올림과 착지를 확인합니다. 장면 편집 중 일시 정지는 시나리오도 정지합니다.
+두 브라우저 페이지의 **Restart simulation** 버튼은 팔과 블록을 초기화하고 example을 다시 실행합니다.
+현재 장면 설정은 유지하며 JSON 파일을 저장하거나 다시 읽지 않습니다. `sim_cmd.sh`는 수동 명령이 필요할 때만 사용합니다.
 
 ### 브라우저 접속
 
@@ -167,8 +174,70 @@ bash scripts/test_sim.sh          # 메뉴에서 선택
 | SSH로 접속 | VS Code **Ports** 패널에서 포워딩한 뒤 `http://localhost:23517` |
 
 다른 포트를 지정했다면 출력된 URL을 사용합니다. GPU/EGL로 화면을 렌더링해 영상을 전송하므로
-데스크톱 디스플레이는 필요 없습니다. 시뮬레이터는 개발 전용이며 카메라와 `/tf`는 아직 지원하지 않습니다.
+데스크톱 디스플레이는 필요 없습니다. 시뮬레이터는 개발 전용입니다. 브라우저 카메라 뷰를 제공하지만 ROS 카메라 토픽과 `/tf`는 아직 발행하지 않습니다.
 모델은 [MuJoCo Menagerie](https://github.com/google-deepmind/mujoco_menagerie/tree/main/agilex_piper)를 사용합니다.
+
+### 실험실 장면과 카메라 뷰
+
+기본 장면은 84 × 54 cm 상판 네 개를 2 × 2로 배치한 테이블, 전체 테이블 중앙 근처에
+설치한 PIPER, 7.5 × 2.5 × 1.5 cm 블록 여섯 개를 포함합니다.
+브라우저의 **Overview**, **Overhead camera**, **Wrist camera** 버튼으로 뷰를 전환합니다.
+Overview에는 X/Y/Z 방향 표시가, Overhead camera에는 X/Y 방향 표시가 나타납니다.
+화살표는 월드 좌표계의 양의 방향을 가리키며 X는 빨강, Y는 초록, Z는 파랑입니다.
+상부 카메라 렌즈는 상판에서 89 cm 위에 있으며 전체 테이블 중앙 기준
+X = -3 cm, Y = +2 cm 위치에서 수직으로 내려다봅니다.
+손목 카메라는 `joint6` 회전 이전의 팔 케이싱(`link5`)에 고정됩니다. 현재는 이상적인 RGB 영상만 제공하며
+장착 프레임은 고정 그리퍼 루트 좌표계(`gripper_root_mount`) 기준으로 배치하며 카메라는
+장착 프레임 기준으로 배치합니다. 렌즈는
+그리퍼와 같은 전방 방향(그리퍼 루트 +Y, `link6` +Z)을 평행하게 바라봅니다.
+참고 사진처럼 은색 카메라 바를 팔에 수직으로 가로 배치하고 얇은 패드로 손목에 직접
+부착합니다. 포스트는 없으며 손가락을 향해 기울이지 않습니다. 하우징 치수는 추정값입니다.
+`wrist_camera_mount_position`과 `wrist_camera_mount_quaternion`은 패드, 하우징, 렌즈를 함께
+이동하거나 회전합니다.
+`wrist_camera_roll_degrees`로 하우징과 별도로 영상 방향을 조정합니다.
+이 좌표계는 손목 롤이 0일 때의 그리퍼 루트 자세를 사용하며 팔 케이싱에 고정됩니다.
++X는 롤이 0인 `link6`의 +X와 반대입니다. 손목 롤과 손가락 개폐는 카메라를 케이싱에서 움직이지 않습니다.
+`wrist_camera_position`과 `wrist_camera_quaternion`은 장착 프레임 기준으로 카메라 렌즈의
+위치(m)와 회전(`[w, x, y, z]`)을 설정하며
+로봇 손목의 위치나 관절값을 바꾸지 않습니다.
+롤 기본값은 0이며 영상 위쪽은 그리퍼 루트 +X, 카메라 바의 가로 방향은 그리퍼 루트 Z입니다.
+음수 값은 영상을 반시계 방향으로 회전합니다.
+SR305의 노이즈 모델이나 ROS RGB-D 토픽은 포함하지 않습니다.
+
+[lab_scene.json](sim/piper_mujoco_sim/config/lab_scene.json)에서 설정을 수정합니다.
+거리 단위는 m이며 원점은 전체 상판 중앙, +Z는 위쪽입니다. +X는 168 cm 방향,
++Y는 108 cm 방향입니다. 로봇 베이스와 포스트 중앙은 원점 기준
+X = +3 cm, Y = -2 cm이며 `post_position`으로 설정합니다. 상부 카메라는
+같은 좌표계의 `overhead_position`으로 설정합니다. 상판 간격 1 mm, 테이블 높이 75 cm,
+포스트 반지름 4 cm, 팔 방향, 블록 질량 20 g 및 마찰, 손목 카메라의 정확한 위치와
+방향은 조정 가능한 초기 추정값입니다. 리더 암은 생략했습니다.
+기본 브라우저 페이지(`/`)는 읽기 전용 뷰어입니다. `/edit`에서 **Scene editor**를 열거나
+`scene_editing:=true`로 실행하면 `/`에도 편집기를 표시합니다:
+
+```bash
+ros2 launch piper_mujoco_sim sim.launch.py scene_editing:=true
+# 스크립트로 새 시뮬레이터를 시작하는 경우:
+SCENE_EDITING=true bash scripts/test_sim.sh
+```
+
+스크립트는 두 URL을 출력합니다. 기존 시뮬레이터를 재사용하면 홈페이지 모드는 유지됩니다.
+편집 API는 `/edit/scene`에만 있으며 `/` 조회는 다른 뷰어의 편집 모드를 활성화하지 않습니다.
+편집기에서 팔 베이스, 카메라 마운트와 렌즈, 상부 카메라,
+시야각 및 블록을 편집할 수 있습니다. 위치는 cm, 회전은 도 단위이며 부모 좌표계를 표시합니다.
+Preview는 즉시 적용하고 물리와 팔 명령을 일시 정지합니다. **Resume simulation**으로 재개합니다.
+**Revert**는 마지막 저장 상태로 복원하고 **Save scene**은 설정 JSON에 저장합니다.
+**Reload scene file**은 텍스트 편집기로 변경한 위치와 회전을 불러옵니다. 사용자 지정 MJCF는 뷰만 제공합니다.
+테이블 치수 등 구조 설정을 수동 변경한 경우 시뮬레이터를 재시작해야 합니다. `test_sim.sh`가 재사용하는 기존
+시뮬레이터에는 변경이 적용되지 않습니다.
+
+앱 없이 장면만 확인하려면 컨테이너에서 실행합니다:
+
+```bash
+cd ~/ws
+colcon build --symlink-install --packages-select piper_mujoco_sim
+source install/setup.bash
+ROS_DOMAIN_ID=42 ros2 launch piper_mujoco_sim sim.launch.py
+```
 
 ### ROS 도메인, 포트, 기존 서버
 

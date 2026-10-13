@@ -1,0 +1,67 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>PIPER MuJoCo</title>
+<style>
+*{box-sizing:border-box}body{margin:0;background:#11161d;color:#e4eaf2;font:15px system-ui,sans-serif}
+header{display:flex;align-items:center;gap:16px;padding:14px 20px;border-bottom:1px solid #303b4a;flex-wrap:wrap}
+h1{font-size:18px;margin:0 auto 0 0}button,select,input{font:inherit;color:inherit;background:#202b38;border:1px solid #435269;border-radius:6px;padding:8px}
+button{cursor:pointer}button:hover{background:#35465c}button:disabled{opacity:.5;cursor:default}.primary{background:#245cb0}
+main{display:grid;grid-template-columns:minmax(0,1fr) 340px;min-height:calc(100vh - 65px)}
+.viewport{padding:16px;text-align:center;align-self:start;position:sticky;top:0}.viewport img{width:100%;max-height:80vh;object-fit:contain;background:#080a0e;border-radius:8px}
+aside{padding:20px;border-left:1px solid #303b4a;background:#18212c}h2{font-size:17px;margin:0 0 16px}select{width:100%}
+.muted{color:#a9b7c9;font-size:13px;line-height:1.6}.frame{padding:12px;border:1px solid #435269;border-radius:6px;margin:14px 0}
+fieldset{border:0;padding:0;margin:16px 0}legend{margin-bottom:8px;font-weight:600}.row{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+label{display:block;font-size:13px}input[type=number]{width:100%;margin-top:5px}input[type=checkbox]{accent-color:#6097ea}
+.actions{display:flex;gap:6px;flex-wrap:wrap;margin-top:16px}.actions button{flex:1}#status{min-height:44px;line-height:1.5;font-size:13px;color:#b4c9e5}#status.error{color:#ff9797}
+#path{overflow-wrap:anywhere;font-size:12px}details{margin-top:18px}summary{cursor:pointer}.view.active{background:#245cb0}
+@media(max-width:850px){main{grid-template-columns:1fr}.viewport{position:static}aside{border-left:0;border-top:1px solid #303b4a}.viewport img{max-height:60vh}}
+</style></head><body>
+<header><h1>PIPER · Scene editor</h1><button class="view active" data-view="overview">Overview</button><button class="view" data-view="overhead">Overhead camera</button><button class="view" data-view="wrist">Arm camera</button><button id="pause" disabled>Pause simulation</button><button id="restart">Restart simulation</button></header>
+<main><section class="viewport"><img id="feed" src="/stream?view=overview" alt="Live simulation"><p class="muted" id="caption">World axes: X red · Y green · Z blue</p></section>
+<aside><h2>Edit scene</h2><select id="object" aria-label="Object to edit" disabled></select><div class="frame muted" id="frame">Loading scene…</div><form id="fields"></form>
+<label><input type="checkbox" id="auto" checked> Preview automatically after an edit</label>
+<p class="muted">Preview pauses physics and arm commands so you can inspect the placement. Resume when ready.</p>
+<div class="actions"><button id="preview" disabled>Preview</button><button id="revert" disabled>Revert</button><button id="save" class="primary" disabled>Save scene</button></div>
+<p id="status" role="status" aria-live="polite"></p><p class="muted" id="path"></p>
+<button id="reload" disabled>Reload scene file</button><p class="muted">Reload discards unsaved edits and reads pose changes made in your text editor.</p>
+<details><summary>Frames and rotation</summary><p class="muted">The mount is the parent of the arm camera. Moving or rotating the mount carries its pad, housing, and lens together. Camera adjustments are relative to the mount.</p><p class="muted">Position is in centimeters. Rotation uses roll about X, pitch about Y, then yaw about Z, in the parent frame. Saved rotations use normalized quaternions. Image roll affects the view independently.</p></details>
+</aside></main>
+<script>
+const $=id=>document.getElementById(id);
+let state,draft,changes={},busy=false,timer;
+const objects=[
+ {id:'arm',name:'Arm base',frame:'Parent: combined table center. +X follows table width, +Y depth, +Z up.',position:'post_position',scalar:'robot_yaw_degrees',scalarLabel:'Heading (degrees)'},
+ {id:'overhead',name:'Overhead camera',frame:'Parent: combined table center. Zero rotation looks straight down; image-up is +Y.',position:'overhead_position',quaternion:'overhead_quaternion'},
+ {id:'mount',name:'Arm camera mount',frame:'Parent: arm casing (link5). Coordinates use the gripper-root frame at zero wrist roll, fixed to the casing. +X points above the wrist; +Y points forward. The mount does not inherit joint6 rotation.',position:'wrist_camera_mount_position',quaternion:'wrist_camera_mount_quaternion'},
+ {id:'lens',name:'Arm camera · relative to mount',frame:'Parent: arm camera mount. Position and rotation are offsets from the mount, rather than from the arm or table.',position:'wrist_camera_position',quaternion:'wrist_camera_quaternion',scalar:'wrist_camera_roll_degrees',scalarLabel:'Image roll (degrees)'},
+ {id:'fov',name:'Camera field of view',frame:'Shared vertical field of view for both cameras.',scalar:'camera_fovy',scalarLabel:'Vertical field of view (degrees)'}
+];
+const rad=v=>v*Math.PI/180,deg=v=>v*180/Math.PI;
+function quaternion(angles){const [r,p,y]=angles.map(v=>rad(v)/2),cr=Math.cos(r),sr=Math.sin(r),cp=Math.cos(p),sp=Math.sin(p),cy=Math.cos(y),sy=Math.sin(y);return [cr*cp*cy+sr*sp*sy,sr*cp*cy-cr*sp*sy,cr*sp*cy+sr*cp*sy,cr*cp*sy-sr*sp*cy];}
+function euler(q){let [w,x,y,z]=q,n=Math.hypot(...q);w/=n;x/=n;y/=n;z/=n;const sinPitch=Math.max(-1,Math.min(1,2*(w*y-z*x)));if(Math.abs(sinPitch)>1-1e-10)return [0,deg(Math.asin(sinPitch)),deg(Math.atan2(-2*(x*y-w*z),1-2*(x*x+z*z)))];return [deg(Math.atan2(2*(w*x+y*z),1-2*(x*x+y*y))),deg(Math.asin(sinPitch)),deg(Math.atan2(2*(w*z+x*y),1-2*(y*y+z*z)))];}
+function message(text,error=false){$('status').textContent=text;$('status').classList.toggle('error',error);}
+function controls(disabled){for(const id of ['object','preview','revert','save','pause','reload'])$(id).disabled=disabled;for(const input of $('fields').querySelectorAll('input'))input.disabled=disabled;}
+function row(title,labels,values,update,step){const field=document.createElement('fieldset'),legend=document.createElement('legend');legend.textContent=title;field.append(legend);const row=document.createElement('div');row.className='row';const inputs=[];labels.forEach((name,i)=>{const label=document.createElement('label');label.textContent=name;const input=document.createElement('input');input.type='number';input.step=step;input.value=Number(values[i].toFixed(4));inputs.push(input);input.addEventListener('change',()=>{const values=inputs.map(i=>i.valueAsNumber);if(values.some(v=>!Number.isFinite(v))){message('Enter a number in every field.',true);return;}update(values);message('Edited. Preview or save to apply.');if($('auto').checked){clearTimeout(timer);timer=setTimeout(()=>action('preview'),150);}});label.append(input);row.append(label);});field.append(row);$('fields').append(field);}
+function set(key,value){draft[key]=value;changes[key]=value;}
+function inspector(){clearTimeout(timer);$('fields').replaceChildren();const object=objects.find(o=>o.id===$('object').value);$('frame').textContent=object.frame;
+ if(object.block!==undefined){row('Position (cm)',['X','Y'],draft.block_positions[object.block].map(v=>v*100),values=>{const all=structuredClone(draft.block_positions);all[object.block]=values.map(v=>v/100);set('block_positions',all);},.1);}
+ if(object.position){const values=draft[object.position];row('Position (cm)',['X','Y','Z'].slice(0,values.length),values.map(v=>v*100),values=>set(object.position,values.map(v=>v/100)),.1);}
+ if(object.quaternion){row('Rotation (degrees)',['Roll X','Pitch Y','Yaw Z'],euler(draft[object.quaternion]||[1,0,0,0]),values=>set(object.quaternion,quaternion(values)),1);}
+ if(object.scalar){row(object.scalarLabel,['Value'],[draft[object.scalar]||0],values=>set(object.scalar,values[0]),1);}
+}
+function accept(next){state=next;draft=structuredClone(next.config);changes={};$('pause').textContent=next.paused?'Resume simulation':'Pause simulation';$('path').textContent='Scene file: '+next.path;inspector();}
+async function action(name){if(busy)return;clearTimeout(timer);busy=true;controls(true);message('Applying…');try{const payload=name==='pause'?{paused:!state.paused}:{changes};const response=await fetch('/edit/scene/'+name,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});const result=await response.json();if(!response.ok)throw Error(result.error||'Editor request failed.');
+ // Pausing does not discard local edits awaiting preview.
+ if(name==='pause'){state=result;$('pause').textContent=result.paused?'Resume simulation':'Pause simulation';}else accept(result);
+ message(name==='save'?'Saved to scene file.':name==='revert'?'Restored the last saved scene.':name==='reload'?'Loaded poses from scene file · paused.':name==='pause'?(state.paused?'Simulation paused.':'Simulation resumed.'):'Preview applied · paused · unsaved.');
+ }catch(error){message(error.message,true);}finally{busy=false;controls(false);}}
+document.querySelectorAll('.view').forEach(button=>button.addEventListener('click',()=>{const name=button.dataset.view;$('feed').src='/stream?view='+name;document.querySelectorAll('.view').forEach(b=>b.classList.toggle('active',b===button));$('caption').textContent=name==='wrist'?'Arm camera view':name==='overhead'?'Overhead camera · world X/Y axes':'World axes: X red · Y green · Z blue';}));
+$('object').addEventListener('change',inspector);for(const name of ['preview','save','revert','pause','reload'])$(name).addEventListener('click',()=>action(name));$('fields').addEventListener('submit',event=>event.preventDefault());
+async function init(){try{const response=await fetch('/edit/scene');const next=await response.json();if(!next.enabled){$('frame').textContent=next.message;return;}next.config.block_positions.forEach((_,index)=>objects.push({id:'block'+index,name:'Block '+(index+1),frame:'Parent: combined table center. Preview places this block on the tabletop and resets its motion.',block:index}));for(const object of objects){const option=document.createElement('option');option.value=object.id;option.textContent=object.name;$('object').append(option);}accept(next);controls(false);message('Ready. Select an object to edit.');}catch(error){message('Could not load editor: '+error.message,true);}}
+init();
+$('restart').addEventListener('click',async()=>{
+ if(busy)return;clearTimeout(timer);busy=true;$('restart').disabled=true;controls(true);
+ try{const response=await fetch('/simulation/restart',{method:'POST',headers:{'Content-Type':'application/json'},body:'{}'});const result=await response.json();if(!response.ok)throw Error(result.error);if(state)state.paused=false;$('pause').textContent='Pause simulation';message(result.message);}
+ catch(error){message(error.message,true);}finally{busy=false;$('restart').disabled=false;if(state)controls(false);}
+});
+</script></body></html>

@@ -2,6 +2,7 @@
 # Build and run one app against MuJoCo inside the devcontainer.
 # Usage: bash scripts/test_sim.sh [app-name]
 # Override ROS_DOMAIN_ID (default 42) and HTTP_PORT (fixed port, default 23517) per developer.
+# Set SCENE_EDITING=true to open the editor at / when starting a new simulator.
 set -eo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 APP="${1:-}"
@@ -28,6 +29,7 @@ fi
 }
 export ROS_DOMAIN_ID="${ROS_DOMAIN_ID:-42}"
 export HTTP_PORT="${HTTP_PORT:-23517}"
+export SCENE_EDITING="${SCENE_EDITING:-false}"
 source /opt/ros/humble/setup.bash
 WS="$(cd "$ROOT/../.." && pwd)"
 cd "$WS"
@@ -47,6 +49,9 @@ from pathlib import Path
 import errno
 
 app_dir = sys.argv[1]
+scene_editing = os.environ['SCENE_EDITING'].lower()
+if scene_editing not in ('true', 'false'):
+    sys.exit('SCENE_EDITING must be true or false')
 try:
     port = int(os.environ['HTTP_PORT'])
     if not 1 <= port <= 65535:
@@ -117,7 +122,8 @@ try:
     sim = None
     if existing_pid is None:
         sim = subprocess.Popen(
-            ['ros2', 'launch', 'piper_mujoco_sim', 'sim.launch.py', f'http_port:={port}'],
+            ['ros2', 'launch', 'piper_mujoco_sim', 'sim.launch.py', f'http_port:={port}',
+             f'scene_editing:={scene_editing}'],
             start_new_session=True)
         processes.append(sim)
     deadline = time.monotonic() + 30
@@ -134,6 +140,7 @@ try:
             raise RuntimeError('Simulator did not start within 30 seconds')
         time.sleep(0.2)
     print(f'\nBrowser: http://localhost:{port} (remote: http://<dev-pc-ip>:{port})', flush=True)
+    print(f'Scene editor: http://localhost:{port}/edit', flush=True)
     stop_message = 'Ctrl+C stops the app; the existing simulator stays running.' if existing_pid else 'Ctrl+C stops both.'
     print(f"ROS_DOMAIN_ID={os.environ['ROS_DOMAIN_ID']}; starting {os.path.basename(app_dir)}. {stop_message}\n", flush=True)
     app = subprocess.Popen(['bash', 'start.sh'], cwd=app_dir, start_new_session=True)
