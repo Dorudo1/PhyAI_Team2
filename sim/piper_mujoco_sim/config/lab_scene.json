@@ -6,6 +6,13 @@
   "table_gap": 0.001,
   "table_height": 0.75,
   "table_thickness": 0.025,
+  "lighting": {
+    "ceiling_height": 2.25,
+    "ambient": [0.3, 0.3, 0.3],
+    "camera_fill": [0.2, 0.2, 0.2],
+    "diffuse": [0.3, 0.3, 0.3],
+    "specular": [0.02, 0.02, 0.02]
+  },
   "post_radius": 0.04,
   "post_position": [
     0.1,

@@ -66,8 +66,22 @@ def build_scene(robot_path, config_path):
     visual = root.find('visual')
     ET.SubElement(visual, 'global', offwidth='960', offheight='720')
     ET.SubElement(visual, 'map', znear='0.005', zfar='10')
-    ET.SubElement(visual, 'headlight', ambient='.35 .35 .35', diffuse='.7 .7 .7')
-    ET.SubElement(world, 'light', pos='0 0 2', dir='0 0 -1', diffuse='0.8 0.8 0.8', castshadow='false')
+    # Office-style ceiling lighting with uniform room fill. Relative RGB
+    # strengths approximate the appearance; MuJoCo does not calibrate lux here.
+    lighting = config.get('lighting', {})
+    ET.SubElement(visual, 'headlight', ambient=vector(lighting.get('ambient', [.3, .3, .3])),
+                  diffuse=vector(lighting.get('camera_fill', [.2, .2, .2])),
+                  specular='0 0 0')
+    for row in range(2):
+        for column in range(2):
+            x = (column - .5) * (width + gap)
+            y = (row - .5) * (depth + gap)
+            ET.SubElement(world, 'light', name=f'ceiling_light_{row}_{column}',
+                          pos=vector([x, y, lighting.get('ceiling_height', 2.25)]),
+                          dir='0 0 -1', cutoff='90', exponent='0', attenuation='1 0 0',
+                          ambient='0 0 0', diffuse=vector(lighting.get('diffuse', [.3, .3, .3])),
+                          specular=vector(lighting.get('specular', [.02, .02, .02])),
+                          castshadow='false')
     ET.SubElement(world, 'geom', name='floor', type='plane', size='3 3 .1',
                   pos=vector([0, 0, -height]), rgba='.22 .24 .26 1')
     for row in range(2):

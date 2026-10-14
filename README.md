@@ -188,6 +188,11 @@ The arrows indicate positive world directions: X red, Y green, and Z blue.
 The overhead lens is 89 cm above the tabletop, looking straight down from
 X = -3 cm and Y = +2 cm relative to the combined table center. The wrist camera follows `link6`.
 These are ideal RGB browser views, not an SR305 sensor/noise simulation or ROS RGB-D streams.
+Four overhead lights, ambient room fill, and camera-facing fill illuminate the scene.
+The `lighting` settings in `lab_scene.json` control ceiling height above the tabletop
+and ambient/diffuse/specular RGB strengths; `camera_fill` sets the camera-facing diffuse light. These are visual intensities, not calibrated
+lux measurements. Stop and relaunch the simulator process after changing lighting;
+the browser **Restart simulation** button only resets the robot and blocks.
 
 Edit [lab_scene.json](sim/piper_mujoco_sim/config/lab_scene.json) to adjust the layout.
 All distances are in meters. The world origin is the combined tabletop center; +Z points up,
