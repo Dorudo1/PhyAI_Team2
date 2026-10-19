@@ -17,13 +17,16 @@ def generate_launch_description():
                               description='Optional custom MJCF instead of the lab scene'),
         DeclareLaunchArgument('scene_editing', default_value='false',
                               description='Open the scene editor at / instead of the read-only viewer; /edit always provides the editor'),
+        DeclareLaunchArgument('publish_cameras', default_value='false',
+                              description='Publish live RGB-D, CameraInfo and camera TF for perception apps'),
         Node(
             package='piper_mujoco_sim',
             executable='sim',
             parameters=[{'http_port': LaunchConfiguration('http_port'),
                          'scene_config': LaunchConfiguration('scene_config'),
                          'scene_editing': ParameterValue(LaunchConfiguration('scene_editing'), value_type=bool),
-                         'model_path': LaunchConfiguration('model_path')}],
+                         'model_path': LaunchConfiguration('model_path'),
+                         'publish_cameras': ParameterValue(LaunchConfiguration('publish_cameras'), value_type=bool)}],
             output='screen',
         ),
     ])

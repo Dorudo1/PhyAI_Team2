@@ -174,7 +174,7 @@ bash scripts/test_sim.sh          # 메뉴에서 선택
 | SSH로 접속 | VS Code **Ports** 패널에서 포워딩한 뒤 `http://localhost:23517` |
 
 다른 포트를 지정했다면 출력된 URL을 사용합니다. GPU/EGL로 화면을 렌더링해 영상을 전송하므로
-데스크톱 디스플레이는 필요 없습니다. 시뮬레이터는 개발 전용입니다. 브라우저 카메라 뷰를 제공하지만 ROS 카메라 토픽과 `/tf`는 아직 발행하지 않습니다.
+데스크톱 디스플레이는 필요 없습니다. 시뮬레이터는 개발 전용입니다. 브라우저 카메라 뷰를 제공합니다. `publish_cameras:=true`를 설정하면 렌더링한 RGB-D, CameraInfo, 카메라/베이스 변환(`/tf`)을 발행합니다.
 모델은 [MuJoCo Menagerie](https://github.com/google-deepmind/mujoco_menagerie/tree/main/agilex_piper)를 사용합니다.
 
 ### 실험실 장면과 카메라 뷰

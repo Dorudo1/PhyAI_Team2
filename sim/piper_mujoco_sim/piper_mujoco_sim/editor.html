@@ -17,7 +17,7 @@ label{display:block;font-size:13px}input[type=number]{width:100%;margin-top:5px}
 @media(max-width:850px){main{grid-template-columns:1fr}.viewport{position:static}aside{border-left:0;border-top:1px solid #303b4a}.viewport img{max-height:60vh}}
 </style></head><body>
 <header><h1>PIPER · Scene editor</h1><button class="view active" data-view="overview">Overview</button><button class="view" data-view="overhead">Overhead camera</button><button class="view" data-view="wrist">Arm camera</button><button id="pause" disabled>Pause simulation</button><button id="restart">Restart simulation</button></header>
-<main><section class="viewport"><img id="feed" src="/stream?view=overview" alt="Live simulation"><p class="muted" id="caption">World axes: X red · Y green · Z blue</p></section>
+<main><section class="viewport"><img id="feed" alt="Live simulation"><p class="muted" id="caption">World axes: X red · Y green · Z blue</p></section>
 <aside><h2>Edit scene</h2><select id="object" aria-label="Object to edit" disabled></select><div class="frame muted" id="frame">Loading scene…</div><form id="fields"></form>
 <label><input type="checkbox" id="auto" checked> Preview automatically after an edit</label>
 <p class="muted">Preview pauses physics and arm commands so you can inspect the placement. Resume when ready.</p>
@@ -27,6 +27,16 @@ label{display:block;font-size:13px}input[type=number]{width:100%;margin-top:5px}
 <details><summary>Frames and rotation</summary><p class="muted">The mount is the parent of the arm camera. Moving or rotating the mount carries its pad, housing, and lens together. Camera adjustments are relative to the mount.</p><p class="muted">Position is in centimeters. Rotation uses roll about X, pitch about Y, then yaw about Z, in the parent frame. Saved rotations use normalized quaternions. Image roll affects the view independently.</p></details>
 </aside></main>
 <script>
+// Release the MJPEG connection while hidden or navigating to the workspace.
+let activeView='overview';
+const feed=document.getElementById('feed');
+function pauseFeed(){feed.removeAttribute('src')}
+function resumeFeed(){if(!document.hidden)feed.src='/stream?view='+activeView}
+document.addEventListener('visibilitychange',()=>document.hidden?pauseFeed():resumeFeed());
+window.addEventListener('pagehide',pauseFeed);
+window.addEventListener('pageshow',resumeFeed);
+resumeFeed();
+
 const $=id=>document.getElementById(id);
 let state,draft,changes={},busy=false,timer;
 const objects=[
@@ -55,7 +65,7 @@ async function action(name){if(busy)return;clearTimeout(timer);busy=true;control
  if(name==='pause'){state=result;$('pause').textContent=result.paused?'Resume simulation':'Pause simulation';}else accept(result);
  message(name==='save'?'Saved to scene file.':name==='revert'?'Restored the last saved scene.':name==='reload'?'Loaded poses from scene file · paused.':name==='pause'?(state.paused?'Simulation paused.':'Simulation resumed.'):'Preview applied · paused · unsaved.');
  }catch(error){message(error.message,true);}finally{busy=false;controls(false);}}
-document.querySelectorAll('.view').forEach(button=>button.addEventListener('click',()=>{const name=button.dataset.view;$('feed').src='/stream?view='+name;document.querySelectorAll('.view').forEach(b=>b.classList.toggle('active',b===button));$('caption').textContent=name==='wrist'?'Arm camera view':name==='overhead'?'Overhead camera · world X/Y axes':'World axes: X red · Y green · Z blue';}));
+document.querySelectorAll('.view').forEach(button=>button.addEventListener('click',()=>{const name=button.dataset.view;activeView=name;resumeFeed();document.querySelectorAll('.view').forEach(b=>b.classList.toggle('active',b===button));$('caption').textContent=name==='wrist'?'Arm camera view':name==='overhead'?'Overhead camera · world X/Y axes':'World axes: X red · Y green · Z blue';}));
 $('object').addEventListener('change',inspector);for(const name of ['preview','save','revert','pause','reload'])$(name).addEventListener('click',()=>action(name));$('fields').addEventListener('submit',event=>event.preventDefault());
 async function init(){try{const response=await fetch('/edit/scene');const next=await response.json();if(!next.enabled){$('frame').textContent=next.message;return;}next.config.block_positions.forEach((_,index)=>objects.push({id:'block'+index,name:'Block '+(index+1),frame:'Parent: combined table center. Preview places this block on the tabletop and resets its motion.',block:index}));for(const object of objects){const option=document.createElement('option');option.value=object.id;option.textContent=object.name;$('object').append(option);}accept(next);controls(false);message('Ready. Select an object to edit.');}catch(error){message('Could not load editor: '+error.message,true);}}
 init();

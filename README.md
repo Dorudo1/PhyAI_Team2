@@ -175,7 +175,7 @@ Restart keeps active scene settings and does not save or reload the JSON file.
 | Through SSH | Forward the port in VS Code's **Ports** panel, then use `http://localhost:23517` |
 
 Use the printed URL if you set another port. Rendering uses offscreen GPU/EGL and streams video;
-no desktop display is needed. The simulator is development-only. The browser includes virtual camera views; ROS camera topics and `/tf` are not published yet.
+no desktop display is needed. The simulator is development-only. The browser includes virtual camera views. Enable `publish_cameras:=true` to publish rendered RGB-D, CameraInfo, and camera/base transforms on `/tf` for perception apps.
 Its model comes from [MuJoCo Menagerie](https://github.com/google-deepmind/mujoco_menagerie/tree/main/agilex_piper).
 
 ### Lab scene and camera views

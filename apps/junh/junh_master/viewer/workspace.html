@@ -1,0 +1,49 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Discovered workspace</title>
+<style>
+:root{color-scheme:dark;font-family:system-ui,sans-serif;background:#111820;color:#e6edf3}body{margin:0}header{padding:18px 24px;border-bottom:1px solid #324251;display:flex;align-items:center;gap:20px}h1{font-size:21px;margin:0}button,a{color:#e6edf3;background:#233747;padding:8px 12px;border:1px solid #526779;border-radius:6px;cursor:pointer;text-decoration:none}main{display:grid;grid-template-columns:minmax(0,1fr) 310px;gap:16px;padding:18px}canvas{width:100%;height:70vh;background:#101820;border:1px solid #324251;border-radius:10px;touch-action:none}aside{background:#1a2632;border-radius:10px;padding:16px;overflow-wrap:anywhere}.muted{color:#a6b8c8;font-size:13px}.legend{display:flex;flex-wrap:wrap;gap:15px;margin:10px 0}.dot{display:inline-block;width:10px;height:10px;border-radius:2px;margin-right:5px}.row{margin:12px 0}pre{white-space:pre-wrap;font-size:12px}#status{color:#8bd9b1}#error{color:#ffb17b}@media(max-width:800px){main{grid-template-columns:1fr}canvas{height:55vh}}
+</style></head><body>
+<header><h1>Discovered workspace</h1><button id="fit">Fit map</button><a id="sim" href="#" hidden>Simulator</a></header>
+<main><section><p id="status">Waiting for discovery…</p><p id="error"></p><canvas id="map" aria-label="Estimated workspace and coverage, top-down"></canvas>
+<div class="legend"><span><i class="dot" style="background:#319d68"></i>Observed table surface</span><span><i class="dot" style="background:#e4a440"></i>Uncertain</span><span><i class="dot" style="background:#526170"></i>Unobserved</span><span><i class="dot" style="background:#9874af"></i>Stale</span><span><i class="dot" style="background:#539fe9"></i>Confirmed block</span><span><i class="dot" style="background:#ff8854"></i>Provisional / uncertain</span></div>
+<p class="muted">Top-down estimate in the app's coordinate frame. Drag to pan, scroll to zoom, click a block for details. These are camera-derived estimates. A partial map does not certify free space or picking readiness.</p></section>
+<aside><h2>Search and map</h2><div id="summary"></div><h2>Selected candidate</h2><pre id="detail">Click a block fit.</pre></aside></main>
+<script>
+const canvas=document.getElementById('map'),ctx=canvas.getContext('2d');
+let data=null,age=0,selected=null,scale=300,center=[0,0],fittedSession=null,drag=null,packetReceived=performance.now(),hits=[];
+
+function fit(){if(!data)return;const w=data.workspace,s=w.coverage.scope||w.table?.observed_surface_bounds||[-.8,.8,-.5,.5];center=[(s[0]+s[1])/2,(s[2]+s[3])/2];scale=Math.min(canvas.clientWidth/(s[1]-s[0]+.2),canvas.clientHeight/(s[3]-s[2]+.2));draw()}
+function project(x,y){return[canvas.clientWidth/2+(x-center[0])*scale,canvas.clientHeight/2-(y-center[1])*scale]}
+function draw(){if(document.hidden)return;const dpr=devicePixelRatio||1,W=canvas.clientWidth,H=canvas.clientHeight;canvas.width=W*dpr;canvas.height=H*dpr;ctx.scale(dpr,dpr);ctx.clearRect(0,0,W,H);hits=[];if(!data)return;
+ const w=data.workspace,elapsed=(performance.now()-packetReceived)/1000,stale=age+elapsed>3;
+ ctx.strokeStyle='#263747';ctx.lineWidth=1;ctx.fillStyle='#8196a8';ctx.font='11px system-ui';
+ for(let x=Math.floor((center[0]-W/scale/2)*10)/10;x<center[0]+W/scale/2;x+=.1){let p=project(x,center[1]);ctx.beginPath();ctx.moveTo(p[0],0);ctx.lineTo(p[0],H);ctx.stroke();ctx.fillText(x.toFixed(1),p[0]+3,H-5)}
+ for(let y=Math.floor((center[1]-H/scale/2)*10)/10;y<center[1]+H/scale/2;y+=.1){let p=project(center[0],y);ctx.beginPath();ctx.moveTo(0,p[1]);ctx.lineTo(W,p[1]);ctx.stroke();ctx.fillText(y.toFixed(1),4,p[1]-3)}
+ const cell=w.coverage.cell_size;
+ for(const c of w.coverage.cells){const p=project((c.index[0]+.5)*cell,(c.index[1]+.5)*cell);ctx.fillStyle=stale||(c.age!==null&&c.age+elapsed>10&&!data.search.result)?'#9874af':{observed:'#319d68',uncertain:'#e4a440',unobserved:'#526170'}[c.state];ctx.globalAlpha=c.state==='unobserved'?.25:.55;ctx.fillRect(p[0]-cell*scale/2,p[1]-cell*scale/2,cell*scale,cell*scale)}ctx.globalAlpha=1;
+ for(const t of [...w.tracks,...(w.hypotheses||[])]){const p=project(t.position[0],t.position[1]),[qw,qx,qy,qz]=t.quaternion,yaw=Math.atan2(2*(qw*qz+qx*qy),1-2*(qy*qy+qz*qz));ctx.save();ctx.translate(...p);ctx.rotate(-yaw);ctx.fillStyle=stale||(t.age+elapsed>10&&!data.search.result)?'#9874af':t.id&&t.resolved?'#539fe9':'#ff8854';ctx.globalAlpha=.55;ctx.fillRect(-t.size[0]*scale/2,-t.size[1]*scale/2,t.size[0]*scale,t.size[1]*scale);ctx.globalAlpha=1;ctx.strokeStyle=(t.id||t.hypothesis_id)===selected?'#fff':ctx.fillStyle;ctx.lineWidth=(t.id||t.hypothesis_id)===selected?3:1;ctx.strokeRect(-t.size[0]*scale/2,-t.size[1]*scale/2,t.size[0]*scale,t.size[1]*scale);ctx.restore();ctx.fillStyle='#edf4ff';ctx.fillText(t.id||t.hypothesis_id,p[0]+5,p[1]-7);hits.push({t,p,r:Math.max(10,Math.hypot(t.size[0],t.size[1])*scale/2)})}
+ document.getElementById('status').textContent=(stale?'STALE PUBLISHER · ':'')+data.search.state+' · '+data.search.reason;
+ document.getElementById('error').textContent=data.last_error||'';
+ const summary=document.getElementById('summary');summary.replaceChildren();
+ for(const text of [`Frame: ${w.frame}`,`Map revision: ${w.revision}`,`Session: ${w.session_id}`,`Confirmed blocks: ${w.tracks.length}; provisional hypotheses: ${(w.hypotheses||[]).length}`,`Observed table surface: ${(w.coverage.observed_fraction*100).toFixed(1)}%`,`Explored scope (table + objects): ${((w.coverage.explored_fraction??w.coverage.observed_fraction)*100).toFixed(1)}%`,`Inspection round: ${data.search.inspection_round||0} / ${data.search.inspection_round_limit||0}`,`Observation criteria: ${data.search.assessment?(data.search.assessment.met?'met':'unmet'):'not configured'}`,`Captures: ${data.search.accepted} accepted / ${data.search.rejected} rejected`,`Outcome: ${data.search.result?.status||'in progress'}`,`Table: ${w.table?'plane estimated; boundary incomplete':'unknown'}`,`Publisher age: ${(age+elapsed).toFixed(1)} s`]){const el=document.createElement('div');el.className='row';el.textContent=text;summary.append(el)}
+ const assessment=data.search.assessment;
+ if(assessment){for(const text of [`Scope target: ${(assessment.min_explored_fraction*100).toFixed(1)}%`,`Resolved views per block: ≥ ${assessment.min_resolved_views}`,`Position bound: ≤ ${(assessment.max_position_uncertainty*1000).toFixed(1)} mm`,`Yaw bound: ≤ ${(assessment.max_yaw_uncertainty*180/Math.PI).toFixed(1)}°`,...assessment.reasons]){const el=document.createElement('div');el.className='row';el.textContent=text;summary.append(el)}}
+ if(selected){const t=[...w.tracks,...(w.hypotheses||[])].find(t=>(t.id||t.hypothesis_id)===selected);document.getElementById('detail').textContent=t?`Identity: ${t.identity_state||(t.id?'confirmed':'provisional')}
+Pose: ${t.pose_state||(t.resolved?'resolved':'needs observation')}
+Observation criteria: ${assessment?.blocks.find(b=>b.id===t.id)?.meets_criteria?'met':assessment?'unmet':'not configured'}
+Observation age: ${(t.age+elapsed).toFixed(1)} s
+Age does not revoke static-scene confirmation.
+
+`+JSON.stringify(t,null,2):'Candidate no longer present.'}else{document.getElementById('detail').textContent='Click a block fit.'}
+}
+canvas.onpointerdown=e=>{drag=[e.clientX,e.clientY,...center];canvas.setPointerCapture(e.pointerId)};
+canvas.onpointermove=e=>{if(drag){center=[drag[2]-(e.clientX-drag[0])/scale,drag[3]+(e.clientY-drag[1])/scale];draw()}};
+canvas.onpointerup=e=>{if(drag&&Math.hypot(e.clientX-drag[0],e.clientY-drag[1])<5){const rect=canvas.getBoundingClientRect(),x=e.clientX-rect.left,y=e.clientY-rect.top;const hit=hits.filter(h=>Math.hypot(h.p[0]-x,h.p[1]-y)<h.r).sort((a,b)=>Math.hypot(a.p[0]-x,a.p[1]-y)-Math.hypot(b.p[0]-x,b.p[1]-y))[0];selected=(hit?.t.id||hit?.t.hypothesis_id)||null;draw()}drag=null};
+canvas.onwheel=e=>{e.preventDefault();scale=Math.max(20,Math.min(2500,scale*Math.exp(-e.deltaY*.001)));draw()};
+document.getElementById('fit').onclick=fit;window.onresize=draw;
+let polling=false,pollTimer;
+async function poll(){if(document.hidden||polling)return;clearTimeout(pollTimer);polling=true;try{const response=await fetch('/api/workspace');if(!response.ok)throw Error('Map server unavailable');const packet=await response.json();if(packet.simulator_port){const link=document.getElementById('sim'),sim=new URL(location.href);if(!location.pathname.startsWith('/workspace'))sim.port=packet.simulator_port;sim.pathname='/';link.href=sim;link.hidden=false}if(packet.snapshot){data=packet.snapshot;age=packet.publisher_age;packetReceived=performance.now();if(fittedSession!==data.workspace.session_id){fittedSession=data.workspace.session_id;selected=null;fit()}draw()}}catch(error){document.getElementById('status').textContent='Workspace unavailable: '+error.message}finally{polling=false;if(!document.hidden)pollTimer=setTimeout(poll,1000)}}
+document.addEventListener('visibilitychange',()=>{clearTimeout(pollTimer);if(!document.hidden)poll()});
+window.addEventListener('pagehide',()=>clearTimeout(pollTimer));
+window.addEventListener('pageshow',poll);poll();
+</script></body></html>
