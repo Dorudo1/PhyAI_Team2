@@ -50,6 +50,9 @@ class PiperMujocoSim(Node):
         self.declare_parameter('http_port', 23517)
         self.declare_parameter('workspace_port', 0)
         self.declare_parameter('scene_editing', False)
+        self.declare_parameter('scatter_on_start', False)
+        self.declare_parameter('scatter_seed', -1)
+        self.declare_parameter('scatter_table', 'all')
         self.declare_parameter('view_fps', 30.0)
         self.declare_parameter('view_width', 960)
         self.declare_parameter('view_height', 720)
@@ -82,6 +85,17 @@ class PiperMujocoSim(Node):
                        SceneEditor(self.model, self.data, self.lock, param('scene_config')))
         self.block_scatter = (BlockScatter(self.model, self.data, self.editor.config)
                               if self.editor else None)
+        if self.block_scatter:
+            seed = param('scatter_seed')
+            if seed == -1:
+                seed = None
+            self.block_scatter.prepare_initial_scene(
+                self.editor.config, scatter=param('scatter_on_start'),
+                seed=seed, table=param('scatter_table'))
+            if param('scatter_on_start'):
+                self.get_logger().info(
+                    f'Scattered blocks before simulation startup (seed={seed}, '
+                    f'table={param("scatter_table")}); reset restores the aligned layout.')
         self.pub = self.create_publisher(JointState, param('state_topic'), 10)
         if self.editor:
             self.scene_pub = self.create_publisher(String, 'sim/scene',

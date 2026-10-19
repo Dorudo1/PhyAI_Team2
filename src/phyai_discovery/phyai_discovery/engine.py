@@ -88,8 +88,8 @@ class Discovery:
         self.search.reset()
         self._active_job = None
 
-    def finish(self, reason='Operator finished the scan.'):
-        self.search.finish(reason)
+    def finish(self, reason='Operator finished the scan.', stop_reason='operator_or_sequence'):
+        self.search.finish(reason,stop_reason=stop_reason)
         self._active_job = None
 
     def add_view(self):

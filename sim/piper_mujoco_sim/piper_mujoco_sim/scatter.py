@@ -31,6 +31,13 @@ class BlockScatter:
         if self.baseline is None:
             self.baseline = self.poses(self.data)
 
+    def prepare_initial_scene(self, config, scatter=False, seed=None, table='all'):
+        """Set the aligned reset target before the first camera frame or scan."""
+        reset_scene(self.model, self.data, config)
+        self.remember()
+        if scatter:
+            self.apply(self.plan(config, seed=seed, table=table))
+
     def restore(self):
         if self.baseline is not None:
             self.apply(self.baseline)

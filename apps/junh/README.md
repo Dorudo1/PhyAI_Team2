@@ -2,7 +2,7 @@
 
 This app discovers table geometry and blocks from aligned RGB-D measurements, merges
 observations from overhead and wrist cameras, and publishes a partial workspace
-map for the master. The MuJoCo launch includes an automatic swivel driver that
+map for the master. The MuJoCo launch includes an automatic multi-view driver that
 moves the simulated arm and captures wrist views. The standalone discovery node
 is read-only; hardware search motion and picking/stacking remain unimplemented.
 SAM 2 masks and known block geometry support pose estimation. Uncertain
@@ -32,8 +32,19 @@ own segmentation configuration and checkpoint path.
 
 ## Scatter blocks for discovery tests
 
-Start the simulator with `./apps/junh/run_sim.sh` (rebuild once after updating),
-then run from the repository root:
+`./apps/junh/run_sim.sh` scatters blocks by default before the simulator publishes
+its first camera frame or the automatic search begins. Each launch gets a new
+static layout. For a reproducible scene or one-table layout, launch from the
+repository root with:
+
+```bash
+SCATTER_SEED=42 SCATTER_TABLE=0_1 ./apps/junh/run_sim.sh
+```
+
+`SCATTER_TABLE` accepts `all`, `0_0`, `0_1`, `1_0`, or `1_1`. Set
+`SCATTER_BLOCKS=false` to start with the aligned scene from `lab_scene.json`.
+Rebuild once after updating the simulator. With the simulator already running,
+these commands start a *new* discovery scan after changing the scene:
 
 ```bash
 ./apps/junh/scatter_blocks.py scatter --seed 42
@@ -54,11 +65,23 @@ contact dynamics settle the blocks before a layout is applied. A failed layout
 leaves the running scene unchanged. Scatter and reset restart the robot and
 notify discovery/automatic scanning through the existing simulation restart event.
 
-The first successful scatter remembers the blocks' **current positions and full
-rotation quaternions**. Further scatters keep that original baseline. `reset` and
-the viewer's **Restart simulation** button restore it and clear block velocities.
-The baseline lasts for this simulator process; no scene configuration file is
-changed. Restarting the simulator process returns to its configured layout.
+The simulator saves the **aligned configured positions and full rotation
+quaternions** before startup scattering. Later scatters leave that reset target
+intact. `reset` and the viewer's **Restart simulation** button restore it and
+clear block velocities. The target lasts for this simulator process; no scene
+configuration file is changed. A new simulator process gets a new random layout
+unless a seed or `SCATTER_BLOCKS=false` is specified.
+
+To score a seeded live scan against simulator truth after it finishes, run:
+
+```bash
+python3 apps/junh/examples/evaluate_scatter.py --seed 42
+```
+
+Add `--table 0_1` when that scatter restriction was used, or `--aligned` after
+reset. The evaluator reports confirmed/missing blocks, position and yaw errors,
+and coverage for each physical tabletop. It reads truth only for evaluation;
+discovery still receives camera measurements without simulator block poses.
 
 ## Run live MuJoCo search
 
@@ -96,8 +119,10 @@ between separate processes in this environment. Use the same domain/profile and
 source the workspace in additional terminals.
 
 The first overhead capture runs automatically after the arm settles. The
-simulation-only `sim_scan` node then approaches a hover configuration and swivels
-joint1 through eight configured wrist views, interpolating commands smoothly.
+simulation-only `sim_scan` node then visits eleven survey poses that vary the
+base, shoulder, elbow and wrist joints. These lift the fixed wrist camera into
+upright, downward-looking views at different heights and angles. The camera
+mount, image roll and overhead installation stay fixed throughout the scan.
 At each view it waits for convergence/settling, requests a fresh capture, and waits
 for detection/merging before continuing. It stops advancing when search finishes.
 No manual positioning or capture calls are needed for the default simulation run.
@@ -106,13 +131,18 @@ The startup log prints `AUTO_SEARCH=true` or `false`. The driver reports its
 waiting reason, including missing feedback, paused simulation, or non-simulator
 command subscribers. Open the browser to watch motion and inspect `/junh/discovery`, `/junh/status`, and
 `/junh/scan_status`. The live workspace viewer updates from the accepted captures.
-The scan is fixed and bounded; it does not adapt viewpoints or guarantee full
-coverage. A completed sequence can still produce a partial map and uncertain
+The survey is fixed; reserve captures adapt to uncertain detected objects within
+a bounded budget. A completed sequence can still produce a partial map and uncertain
 tracks. Picking readiness remains false.
 
-`config/mujoco.json` holds the eight `sim_scan.targets`, approach/move/settle times,
+`config/mujoco.json` holds the survey and reserve `sim_scan.targets`, motion limits,
 and the declared search scope across the four tabletops. Discovery still estimates
 table geometry from depth. The simulator renders only the camera currently requested by discovery.
+`move_seconds` and `approach_seconds` are minimum trajectory durations. Larger
+joint changes take longer to keep the cubic interpolation within
+`max_joint_speed` (rad/s) and `max_joint_acceleration` (rad/s²). Small moves no
+longer incur a fixed four-second trajectory. Capture still requires stationary
+joint feedback, independently of the driver's `settle_seconds` delay.
 Full workspace snapshots publish at 1 Hz, while the scan driver receives a small
 5 Hz progress message. RViz markers are generated only with a viewer subscribed.
 Each camera publishes a matching robot mask so arm,
@@ -250,13 +280,42 @@ views. Conflicting table estimates and changed camera calibration reject capture
 
 ## Observation criteria and additional scanning
 
-The simulation first captures the overhead view and its eight baseline wrist
-views. If evidence requirements remain unmet, discovery appends up to two
-configured inspection sweeps at different arm positions. The simulator driver
-executes those poses automatically, without clearing the workspace or block IDs.
-An inspection sweep stops early when the criteria pass. Search returns a partial
-result if the viewpoint budget is exhausted or an additional full sweep fails to
-improve coverage or block evidence.
+The simulation first captures the overhead view and its eleven survey wrist
+views. If evidence requirements remain unmet, discovery appends up to eight
+inspection captures. With `sim_scan.targeted_inspection=true`, the driver chooses
+joint angles around the detected uncertain blocks instead of repeating a fixed
+sweep. Provisional objects and missing supporting views take priority over
+refining an already supported pose. Equally urgent blocks take turns.
+
+Each chosen pose must keep the expected object extent inside the image, clear
+the arm and fixtures along the viewing rays, and pass sampled joint-path contact
+checks. Camera position on the arm, image roll and FOV remain fixed. The planner
+uses measured block positions and known robot/table/camera geometry; free-body
+simulator geometry is disabled in its model so ground-truth block poses cannot
+influence planning. A new capture label must also have a physically different
+camera pose. Retrying a rejected capture reuses its original pose.
+
+`max_targeted_views_per_block` defaults to two extra views per uncertain block.
+Inspection stops early when the criteria pass or no clear novel targeted view
+remains within that budget. The latter returns `partial` with stop reason
+`targeted_views_exhausted`, preserving unresolved evidence. When only table
+coverage remains unmet, configured reserve poses are still available to inspect
+the remaining scope. The workspace and block IDs persist across all captures.
+
+To reproduce discovery across seeded layouts without running ROS motion:
+
+```bash
+source apps/junh/sam2_env.sh
+MUJOCO_GL=egl python3 apps/junh/examples/benchmark_scan.py --backend sam2 \
+  --seeds 42 17 43 7 101 --output /tmp/discovery-benchmark.json
+```
+
+This renders the configured poses using the fixed camera geometry and actual
+RGB-D detector. Ground-truth poses are used only for scoring the resulting
+inventory. The report includes per-capture recall, hypotheses, table coverage,
+position/yaw errors, and each targeted capture's focus and joint pose. Add
+`--fixed-inspection` to compare against the fixed reserve sweep. Its runtime measures rendering and detection; live
+motion, settling and transport timing require `run_sim.sh`.
 
 Edit `search_criteria` in `config/mujoco.json` to set:
 
@@ -289,16 +348,21 @@ camera/viewpoint pairs are required to settle a conflict. Configure sensor error
 bounds for the installation as described in the shared discovery README.
 
 `inspection_rounds` lists the reserve viewpoint names; `sim_scan.targets`
-contains all baseline and reserve joint poses. They are project-specific MuJoCo
-poses, not a general hardware motion planner. The final camera sweep shifts the
-shoulder/elbow pair while preserving their combined angle, giving a different
-view of the upper table. Hardware motion remains deferred.
+contains survey poses and coverage fallback poses. During targeted inspection,
+the driver assigns new joint angles to each reserve label from the current
+perception evidence. These are project-specific MuJoCo motion checks; hardware
+motion remains deferred. `/junh/scan_status` includes `inspection_focus` with the
+detected object ID, estimated position and selected joint angles.
 
 The map distinguishes **observed table surface**, **explored scope** (surface
 plus uncertain object evidence), and **unobserved scope**. Orange cells underneath
 blocks are explored but do not count as observed free table surface. Neither
 metric certifies collision-free space. Full table mapping may remain partial
 even when configured observation criteria pass.
+The simulation scope now spans the physical table edges. Surface hidden under
+blocks or the robot cannot be directly observed, so 100% observed table surface
+is not a physically attainable stop condition for these views. Unobserved cells
+remain visible rather than being counted as free or silently filled by ground truth.
 
 A block's identity, pose resolution, and observation age are separate. A confirmed
 ID stays confirmed as a static scan ages; new contradictory evidence can make

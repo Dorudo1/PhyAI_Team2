@@ -41,10 +41,9 @@ const $=id=>document.getElementById(id);
 let state,draft,changes={},busy=false,timer;
 const objects=[
  {id:'arm',name:'Arm base',frame:'Parent: combined table center. +X follows table width, +Y depth, +Z up.',position:'post_position',scalar:'robot_yaw_degrees',scalarLabel:'Heading (degrees)'},
- {id:'overhead',name:'Overhead camera',frame:'Parent: combined table center. Zero rotation looks straight down; image-up is +Y.',position:'overhead_position',quaternion:'overhead_quaternion'},
+ {id:'overhead',name:'Overhead camera',frame:'Parent: combined table center. Zero rotation looks straight down; image-up is +Y.',position:'overhead_position',quaternion:'overhead_quaternion',fov:'overhead_camera_fovy'},
  {id:'mount',name:'Arm camera mount',frame:'Parent: arm casing (link5). Coordinates use the gripper-root frame at zero wrist roll, fixed to the casing. +X points above the wrist; +Y points forward. The mount does not inherit joint6 rotation.',position:'wrist_camera_mount_position',quaternion:'wrist_camera_mount_quaternion'},
- {id:'lens',name:'Arm camera · relative to mount',frame:'Parent: arm camera mount. Position and rotation are offsets from the mount, rather than from the arm or table.',position:'wrist_camera_position',quaternion:'wrist_camera_quaternion',scalar:'wrist_camera_roll_degrees',scalarLabel:'Image roll (degrees)'},
- {id:'fov',name:'Camera field of view',frame:'Shared vertical field of view for both cameras.',scalar:'camera_fovy',scalarLabel:'Vertical field of view (degrees)'}
+ {id:'lens',name:'Arm camera · relative to mount',frame:'Parent: arm camera mount. Position and rotation are offsets from the mount, rather than from the arm or table.',position:'wrist_camera_position',quaternion:'wrist_camera_quaternion',scalar:'wrist_camera_roll_degrees',scalarLabel:'Image roll (degrees)',fov:'camera_fovy'}
 ];
 const rad=v=>v*Math.PI/180,deg=v=>v*180/Math.PI;
 function quaternion(angles){const [r,p,y]=angles.map(v=>rad(v)/2),cr=Math.cos(r),sr=Math.sin(r),cp=Math.cos(p),sp=Math.sin(p),cy=Math.cos(y),sy=Math.sin(y);return [cr*cp*cy+sr*sp*sy,sr*cp*cy-cr*sp*sy,cr*sp*cy+sr*cp*sy,cr*cp*sy-sr*sp*cy];}
@@ -58,6 +57,7 @@ function inspector(){clearTimeout(timer);$('fields').replaceChildren();const obj
  if(object.position){const values=draft[object.position];row('Position (cm)',['X','Y','Z'].slice(0,values.length),values.map(v=>v*100),values=>set(object.position,values.map(v=>v/100)),.1);}
  if(object.quaternion){row('Rotation (degrees)',['Roll X','Pitch Y','Yaw Z'],euler(draft[object.quaternion]||[1,0,0,0]),values=>set(object.quaternion,quaternion(values)),1);}
  if(object.scalar){row(object.scalarLabel,['Value'],[draft[object.scalar]||0],values=>set(object.scalar,values[0]),1);}
+ if(object.fov){row('Vertical field of view (degrees)',['FOV'],[draft[object.fov]??draft.camera_fovy],values=>set(object.fov,values[0]),1);}
 }
 function accept(next){state=next;draft=structuredClone(next.config);changes={};$('pause').textContent=next.paused?'Resume simulation':'Pause simulation';$('path').textContent='Scene file: '+next.path;inspector();}
 async function action(name){if(busy)return;clearTimeout(timer);busy=true;controls(true);message('Applying…');try{const payload=name==='pause'?{paused:!state.paused}:{changes};const response=await fetch('/edit/scene/'+name,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});const result=await response.json();if(!response.ok)throw Error(result.error||'Editor request failed.');

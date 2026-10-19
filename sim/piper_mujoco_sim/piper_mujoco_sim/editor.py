@@ -18,7 +18,7 @@ VECTORS = {
     'wrist_camera_position': 3,
     'wrist_camera_quaternion': 4,
 }
-SCALARS = {'robot_yaw_degrees', 'wrist_camera_roll_degrees', 'camera_fovy'}
+SCALARS = {'robot_yaw_degrees', 'wrist_camera_roll_degrees', 'camera_fovy', 'overhead_camera_fovy'}
 
 
 class SceneEditor:
@@ -60,7 +60,7 @@ class SceneEditor:
                     raise ValueError('Positions must be within 10 meters of their parent.')
             elif key in SCALARS:
                 value = number(value)
-                if key == 'camera_fovy' and not 1 <= value <= 150:
+                if key in ('camera_fovy', 'overhead_camera_fovy') and not 1 <= value <= 150:
                     raise ValueError('Field of view must be between 1 and 150 degrees.')
             elif key == 'block_positions':
                 if not isinstance(value, list) or len(value) != len(self.config[key]):
@@ -95,8 +95,8 @@ class SceneEditor:
             model.body(body).quat[:] = config.get(quaternion, [1, 0, 0, 0])
         roll = math.radians(config.get('wrist_camera_roll_degrees', 0)) / 2
         model.camera('wrist').quat[:] = [math.cos(roll), 0, 0, math.sin(roll)]
-        for name in ('wrist', 'overhead'):
-            model.camera(name).fovy[0] = config['camera_fovy']
+        model.camera('wrist').fovy[0] = config['camera_fovy']
+        model.camera('overhead').fovy[0] = config.get('overhead_camera_fovy', config['camera_fovy'])
         # Move only blocks whose configured positions changed; preserve other state.
         for index, position in enumerate(config['block_positions']):
             if position != self.config['block_positions'][index]:
@@ -144,11 +144,13 @@ class SceneEditor:
                 fixed = {key: value for key, value in self.saved.items() if key not in editable}
                 if fixed != {key: value for key, value in loaded.items() if key not in editable}:
                     raise ValueError('Table, block dimensions, or other structural settings changed. Restart the simulator to load them.')
-                for key in editable - {'overhead_quaternion', 'wrist_camera_mount_quaternion'}:
+                for key in editable - {'overhead_quaternion', 'wrist_camera_mount_quaternion',
+                                       'overhead_camera_fovy'}:
                     if key not in loaded:
                         raise ValueError(f'Scene file is missing {key}.')
                 config = self.validate({key: value for key, value in loaded.items() if key in editable})
-                for key in ('overhead_quaternion', 'wrist_camera_mount_quaternion'):
+                for key in ('overhead_quaternion', 'wrist_camera_mount_quaternion',
+                            'overhead_camera_fovy'):
                     if key not in loaded:
                         config.pop(key, None)
                 self.apply(config)

@@ -8,10 +8,26 @@
   "table_thickness": 0.025,
   "lighting": {
     "ceiling_height": 2.25,
-    "ambient": [0.3, 0.3, 0.3],
-    "camera_fill": [0.2, 0.2, 0.2],
-    "diffuse": [0.3, 0.3, 0.3],
-    "specular": [0.02, 0.02, 0.02]
+    "ambient": [
+      0.3,
+      0.3,
+      0.3
+    ],
+    "camera_fill": [
+      0.2,
+      0.2,
+      0.2
+    ],
+    "diffuse": [
+      0.3,
+      0.3,
+      0.3
+    ],
+    "specular": [
+      0.02,
+      0.02,
+      0.02
+    ]
   },
   "post_radius": 0.04,
   "post_position": [
@@ -20,11 +36,12 @@
   ],
   "robot_yaw_degrees": 145,
   "overhead_position": [
-    -0.1,
+    0.2,
     0.08,
     0.89
   ],
   "camera_fovy": 54,
+  "overhead_camera_fovy": 40.0,
   "wrist_camera_position": [
     0.02,
     0.02,
@@ -38,15 +55,15 @@
   ],
   "wrist_camera_roll_degrees": 0,
   "wrist_camera_mount_position": [
-    0.035,
-    -0.16,
+    0.04,
+    -0.1,
     0.0
   ],
   "wrist_camera_mount_quaternion": [
-    1,
-    0,
-    0,
-    0
+    0.9762960071199334,
+    0.0,
+    0.0,
+    0.21643961393810288
   ],
   "block_size": [
     0.075,
@@ -84,5 +101,11 @@
       0.53,
       -0.41
     ]
+  ],
+  "overhead_quaternion": [
+    0.9990482215818578,
+    0.043619387365336,
+    0.0,
+    0.0
   ]
 }

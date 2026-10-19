@@ -1,7 +1,8 @@
-"""Fixed joint-space swivel scan for MuJoCo only, separate from discovery logic."""
+"""Varied joint-space camera views for MuJoCo, separate from discovery logic."""
 import json
 import math
 import time
+from pathlib import Path
 
 import numpy as np
 from ament_index_python.packages import get_package_share_directory
@@ -21,6 +22,13 @@ def smooth_target(initial, target, elapsed, duration):
     return [float(a+blend*(b-a)) for a,b in zip(initial,target)]
 
 
+def move_duration(initial, target, minimum, max_speed, max_acceleration):
+    """Bound the peak speed and acceleration of the cubic joint trajectory."""
+    distance = max(abs(a-b) for a,b in zip(initial[:6],target[:6]))
+    return max(minimum, 1.5*distance/max_speed,
+               math.sqrt(6*distance/max_acceleration))
+
+
 def simulator_only(endpoints):
     """Refuse forwarding if command-topic subscribers include anything else."""
     return bool(endpoints) and all(e.node_name == 'piper_mujoco_sim' for e in endpoints)
@@ -30,14 +38,26 @@ class SimScanNode(Node):
     def __init__(self, **kwargs):
         super().__init__('junh_sim_scan', **kwargs)
         self.declare_parameter('config_path',get_package_share_directory('junh_master')+'/config/mujoco.json')
-        from pathlib import Path
+        self.declare_parameter('robot_path','/opt/mujoco_menagerie/agilex_piper/piper.xml')
+        self.declare_parameter('scene_config',get_package_share_directory('piper_mujoco_sim')+'/config/lab_scene.json')
         config=json.loads(Path(self.get_parameter('config_path').value).read_text())
         scan=config['sim_scan']
         self.targets=scan['targets']
+        self.survey_labels=set(config['viewpoints'])
+        self.targeted_inspection=bool(scan.get('targeted_inspection',False))
+        self.max_views_per_block=scan.get('max_targeted_views_per_block',2)
+        if not isinstance(self.max_views_per_block,int) or isinstance(self.max_views_per_block,bool) or self.max_views_per_block<1:
+            raise ValueError('Targeted per-object view budget must be a positive integer.')
+        self.planner=None
+        self.selected_targets={}
+        self.inspection_focus=None
         self.duration=float(scan.get('move_seconds',4.))
         self.approach_duration=float(scan.get('approach_seconds',8.))
         self.settle_seconds=float(scan.get('settle_seconds',.7))
-        if not all(math.isfinite(v) and v>0 for v in (self.duration,self.approach_duration,self.settle_seconds)):
+        self.max_speed=float(scan.get('max_joint_speed',1.2))
+        self.max_acceleration=float(scan.get('max_joint_acceleration',3.))
+        if not all(math.isfinite(v) and v>0 for v in (self.duration,self.approach_duration,
+                       self.settle_seconds,self.max_speed,self.max_acceleration)):
             raise ValueError('Scan timing must be positive.')
         labels = config['viewpoints'] + [name for views in config.get('inspection_rounds',[]) for name in views]
         if set(self.targets)!=set(labels):
@@ -54,6 +74,8 @@ class SimScanNode(Node):
         self.wait_reason='Waiting for simulator and search startup.'
         self.logged_wait=None
         self.client=self.create_client(Trigger,'junh/capture')
+        self.finish_client=self.create_client(Trigger,'junh/end_inspection')
+        self.finish_future=None
         self.pub=self.create_publisher(JointState,'joint_ctrl_single',1)
         self.status_pub=self.create_publisher(String,'junh/scan_status',1)
         self.create_subscription(String,'sim/scene',self.on_scene,
@@ -63,7 +85,7 @@ class SimScanNode(Node):
         self.create_subscription(String,'junh/search_progress',self.on_discovery,1)
         self.create_timer(.02,self.tick)
         self.create_timer(.5,self.publish_status)
-        self.get_logger().info('Automatic MuJoCo swivel search enabled; no hardware execution support.')
+        self.get_logger().info('Automatic MuJoCo multi-view search enabled; no hardware execution support.')
 
     def clear_motion(self):
         self.active=self.initial=self.started=self.settled_since=None
@@ -82,6 +104,8 @@ class SimScanNode(Node):
                 self.actual=None
             self.restart_id=restart
             self.scene=scene;self.scene_received=time.monotonic()
+            if self.planner is not None and scene.get('scan_geometry'):
+                self.planner.sync(scene['scan_geometry'])
         except (ValueError,KeyError,TypeError):self.scene=None
 
     def on_joints(self,msg):
@@ -101,6 +125,9 @@ class SimScanNode(Node):
             session=data['workspace']['session_id']
             if self.session != session:
                 self.clear_motion();self.moved=False
+                self.selected_targets={};self.inspection_focus=None
+                self.finish_future=None
+                if self.planner is not None:self.planner.reset()
                 if self.fault_session != session:self.fault=None
             self.session=session
             self.discovery=data;self.discovery_received=time.monotonic()
@@ -120,6 +147,36 @@ class SimScanNode(Node):
         msg.header.stamp=self.get_clock().now().to_msg()
         msg.name=NAMES;msg.position=target
         self.pub.publish(msg)
+
+    def select_target(self,label):
+        if label in self.selected_targets:
+            return self.selected_targets[label]
+        target=self.targets[label]
+        self.inspection_focus=None
+        if self.targeted_inspection and label not in self.survey_labels and self.scene.get('scan_geometry'):
+            if self.planner is None:
+                import mujoco
+                from piper_mujoco_sim.inspection import InspectionPlanner
+                from piper_mujoco_sim.scene import build_scene
+                model=mujoco.MjModel.from_xml_string(build_scene(
+                    self.get_parameter('robot_path').value,self.get_parameter('scene_config').value))
+                self.planner=InspectionPlanner(model,list(self.targets.values()),self.max_views_per_block)
+                self.planner.sync(self.scene['scan_geometry'])
+                for name,joints in self.selected_targets.items():self.planner.remember(name,joints)
+            focus=self.discovery['workspace'].get('inspection_targets',[])
+            plan=self.planner.choose(focus,self.actual,label)
+            if plan:
+                target=plan['joints'];self.inspection_focus=plan
+                self.get_logger().info(f'Inspection {label}: focus {plan["focus"]} at {plan["position"]}')
+            else:
+                if focus:
+                    self.selected_targets[label]=None
+                    self.get_logger().info(f'Inspection {label}: no clear novel targeted pose remains; stopping partial.')
+                    return None
+                self.get_logger().info(f'Inspection {label}: no uncertain objects; using coverage reserve.')
+        self.selected_targets[label]=list(target)
+        if self.planner is not None:self.planner.remember(label,target)
+        return self.selected_targets[label]
 
     def tick(self):
         now=time.monotonic()
@@ -146,6 +203,14 @@ class SimScanNode(Node):
             if self.active:self.command(self.actual)
             self.wait_reason='Search completed.'
             self.clear_motion();return
+        if self.finish_future is not None:
+            self.wait_reason='Waiting for targeted inspection to finish.'
+            if self.finish_future.done():
+                try:
+                    result=self.finish_future.result()
+                    if not result.success:self.fault_stop('Inspection stop rejected: '+result.message)
+                except Exception as error:self.fault_stop(str(error))
+            return
         target_name=progress['target']
         if self.active is not None and target_name!=self.active:
             self.clear_motion()
@@ -166,16 +231,23 @@ class SimScanNode(Node):
             self.clear_motion()
         if target_name not in self.targets:
             self.fault_stop('No configured scan pose for '+target_name);return
-        target=self.targets[target_name]
+        target=self.select_target(target_name)
+        if target is None:
+            self.wait_reason='Targeted views exhausted; preserving unresolved evidence.'
+            if self.finish_client.service_is_ready():
+                self.finish_future=self.finish_client.call_async(Trigger.Request())
+            return
         if self.active is None:
             limits=[joint['limits'] for joint in self.scene['robot']['joints']]
             if any(not low<=angle<=high for angle,(low,high) in zip(target[:6],limits)) or not 0<=target[6]<=.035:
                 self.fault_stop('Scan target exceeds simulator joint limits.');return
             self.active=target_name;self.initial=list(self.actual)
             self.started=self.scene['simulation_time'];self.settled_since=None
-            self.active_duration=self.duration if self.moved else self.approach_duration
+            self.active_duration=move_duration(self.initial,target,
+                self.duration if self.moved else self.approach_duration,
+                self.max_speed,self.max_acceleration)
             self.wait_reason='Moving to '+target_name
-            self.get_logger().info('Swiveling to '+target_name)
+            self.get_logger().info(f'Moving to {target_name} ({self.active_duration:.2f}s trajectory)')
         # Use scene time; pauses freeze interpolation instead of skipping ahead.
         elapsed=self.scene['simulation_time']-self.started
         self.command(smooth_target(self.initial,target,elapsed,self.active_duration))
@@ -198,6 +270,7 @@ class SimScanNode(Node):
         if reason != self.logged_wait:
             self.get_logger().info(reason);self.logged_wait=reason
         status={'reason':reason,'mode':'mujoco_only','viewpoint':self.active,'fault':self.fault,
+                'inspection_focus':self.inspection_focus,
                 'state':'fault' if self.fault else 'moving_or_capturing' if self.active else 'waiting'}
         self.status_pub.publish(String(data=json.dumps(status)))
 

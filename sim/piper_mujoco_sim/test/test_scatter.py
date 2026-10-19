@@ -13,7 +13,7 @@ import numpy as np
 import pytest
 
 from piper_mujoco_sim.scatter import BlockScatter
-from piper_mujoco_sim.scene import build_scene, reset_scene
+from piper_mujoco_sim.scene import build_scene, reset_scene, scene_snapshot
 from piper_mujoco_sim.web import make_handler
 
 ROBOT = Path(os.environ.get('PIPER_TEST_ROBOT', '/opt/mujoco_menagerie/agilex_piper/piper.xml'))
@@ -80,6 +80,24 @@ def test_repeated_scatters_restore_exact_original_positions_and_quaternions(scen
     np.testing.assert_array_equal(scatter.poses(data), original)
 
 
+def test_startup_scatter_precedes_first_scene_and_reset_restores_aligned_layout(scene):
+    model, data, config, scatter = scene
+    aligned = [np.array([*xy, config['block_size'][2]/2+.001, 1, 0, 0, 0])
+               for xy in config['block_positions']]
+    scatter.prepare_initial_scene(config, scatter=True, seed=42)
+    for pose, expected in zip(scatter.baseline, aligned):
+        np.testing.assert_array_equal(pose, expected)
+    assert any(not np.allclose(pose, expected)
+               for pose, expected in zip(scatter.poses(data), aligned))
+    first_scene = scene_snapshot(model, data, config)
+    assert any(not np.allclose(block['position'], expected[:3])
+               for block, expected in zip(first_scene['blocks'], aligned))
+    scatter.apply(scatter.plan(config, seed=43))
+    scatter.restore()
+    for pose, expected in zip(scatter.poses(data), aligned):
+        np.testing.assert_array_equal(pose, expected)
+
+
 @pytest.mark.parametrize('options', [{'seed': -1}, {'seed': True}, {'table': 'missing'}])
 def test_invalid_request_preserves_scene_and_baseline(scene, options):
     _, data, config, scatter = scene
@@ -95,6 +113,9 @@ def test_cli_http_and_simulator_restart_restore_baseline(scene):
     from piper_mujoco_sim.sim import PiperMujocoSim
     model, data, config, scatter = scene
     original = scatter.poses(data)
+    scatter.prepare_initial_scene(config, scatter=True, seed=42)
+    assert any(not np.allclose(pose, aligned)
+               for pose, aligned in zip(scatter.poses(data), original))
     node = SimpleNamespace(model=model, data=data, block_scatter=scatter,
         editor=SimpleNamespace(config=config, paused=True), lock=threading.RLock(),
         restart_id=0, command_cutoff=0,

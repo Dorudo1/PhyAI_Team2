@@ -21,6 +21,7 @@ from tf2_ros import Buffer, TransformListener, TransformException
 
 from phyai_discovery.observations import Capture, Intrinsics, decode_depth, load_capture, load_manifest
 from phyai_discovery import Discovery, SearchState, Stationarity
+from phyai_discovery.criteria import inspection_targets
 
 
 def transform_matrix(msg):
@@ -81,6 +82,7 @@ class DiscoveryNode(Node):
         self.create_service(Trigger,'junh/capture',self.capture_service)
         self.create_service(Trigger,'junh/restart_scan',self.restart_service)
         self.create_service(Trigger,'junh/finish_scan',self.finish_service)
+        self.create_service(Trigger,'junh/end_inspection',self.end_inspection_service)
         self.create_service(Trigger,'junh/add_view',self.add_view_service)
         if self.recording_entries is None:
             if self.config.get('sim_camera_request_topic'):
@@ -241,6 +243,17 @@ class DiscoveryNode(Node):
         response.success,response.message = True,self.search.reason
         return response
 
+    def end_inspection_service(self,request,response):
+        if not self.search.inspection_round or self.search.state != SearchState.WRIST:
+            response.success,response.message=False,'Targeted inspection can end only between reserve captures.'
+            return response
+        self.discovery.finish('No clear novel targeted views remain within the per-object inspection budget.',
+                              stop_reason='targeted_views_exhausted')
+        response.success,response.message=True,self.search.reason
+        self.publish_progress()
+        self.publish()
+        return response
+
     def add_view_service(self,request,response):
         try:
             self.discovery.add_view()
@@ -306,7 +319,8 @@ class DiscoveryNode(Node):
     def publish_progress(self):
         mode='live' if self.recording_entries is None else 'recorded'
         self.progress_pub.publish(String(data=json.dumps({
-            'workspace':{'session_id':self.workspace.session},
+            'workspace':{'session_id':self.workspace.session,
+                         'inspection_targets':inspection_targets(self.workspace.hypotheses,self.search.assessment)},
             'search':self.search.progress(),'input_mode':mode,'last_error':self.last_error,
             'sim_restart_id':self.sim_restart_id})))
         if self.camera_request_pub is not None:
