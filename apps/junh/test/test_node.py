@@ -15,7 +15,7 @@ from std_msgs.msg import String
 from std_srvs.srv import Trigger
 from visualization_msgs.msg import MarkerArray
 
-from junh_master.ros import discovery_node as discovery_module
+from phyai_discovery_ros import node as discovery_module
 from junh_master.handoff import Master, Placement
 from junh_master.ros.discovery_node import DiscoveryNode
 from junh_master.ros.handoff_node import MasterNode

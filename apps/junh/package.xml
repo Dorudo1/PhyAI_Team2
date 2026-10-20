@@ -6,6 +6,7 @@
   <maintainer email="junhjang@keti.re.kr">PhyAI Team2</maintainer>
   <license>Apache-2.0</license>
   <exec_depend>phyai_discovery</exec_depend>
+  <exec_depend>phyai_discovery_ros</exec_depend>
   <exec_depend>rclpy</exec_depend>
   <exec_depend>std_msgs</exec_depend>
   <exec_depend>sensor_msgs</exec_depend>

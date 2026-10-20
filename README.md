@@ -76,7 +76,8 @@ apps/<name>/
 ```
 
 Use lowercase letters, digits, `-`, and `_` for `<name>`. ROS package names must be unique across
-the repo. Keep app files inside `apps/<name>/`; runtime builds copy only that directory.
+the repo. Keep app files inside `apps/<name>/`; runtime builds include that app and the shared
+packages under `src/`.
 
 ### Robot interface
 
@@ -93,6 +94,26 @@ Your app publishes targets; the simulator or control PC bridge receives them and
 
 The host stack administrator confirms provisional topics and camera names. Arm commands currently
 follow the `piper_ros` convention. If the bridge uses custom messages, add their package to the base image.
+
+### Use discovery in your own app
+
+The shared [discovery core](src/phyai_discovery/README.md) accepts calibrated RGB-D
+captures directly from Python. ROS apps can use
+[`phyai_discovery_ros`](src/phyai_discovery_ros/README.md) for live cameras,
+capture-time TF, stationary feedback checks, and workspace/progress topics:
+
+```bash
+# From the colcon workspace; no Junh app or simulator is required.
+colcon build --symlink-install --packages-up-to phyai_discovery_ros
+source install/setup.bash
+ros2 launch phyai_discovery_ros discovery.launch.py config_path:=/absolute/path/hardware.json
+```
+
+Copy the shared package's configuration template and set your measured camera,
+table, and sensor error settings first. Your app owns robot motion and requests
+captures after moving to each requested viewpoint. The MuJoCo scan driver and its
+joint targets are simulator-specific. The shared adapter is available for hardware
+integration; real-sensor accuracy and hardware trajectories still need validation.
 
 ### Dependencies and installed files
 

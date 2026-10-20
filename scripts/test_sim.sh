@@ -34,7 +34,7 @@ source /opt/ros/humble/setup.bash
 WS="$(cd "$ROOT/../.." && pwd)"
 cd "$WS"
 colcon build --symlink-install \
-    --base-paths "$ROOT/apps/$APP" "$ROOT/sim/piper_mujoco_sim"
+    --base-paths "$ROOT/apps/$APP" "$ROOT/src" "$ROOT/sim/piper_mujoco_sim"
 source "$WS/install/setup.bash"
 python3 - "$ROOT/apps/$APP" <<'PY'
 import os

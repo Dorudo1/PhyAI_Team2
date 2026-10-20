@@ -183,7 +183,7 @@ From the repository root, create synthetic depth/RGB images and replay them:
 
 ```bash
 python3 apps/junh/examples/create_recording.py /tmp/junh-recording
-PYTHONPATH=src/phyai_discovery:apps/junh python3 -m phyai_discovery.recording \
+PYTHONPATH=src/phyai_discovery:src/phyai_discovery_ros:apps/junh python3 -m phyai_discovery.recording \
   /tmp/junh-recording/scan.json --output /tmp/junh-snapshots.jsonl
 ```
 
@@ -504,7 +504,7 @@ motion here.
 
 ```bash
 source /opt/ros/humble/setup.bash
-PYTHONPATH=src/phyai_discovery:apps/junh python3 -m pytest -q src/phyai_discovery/test apps/junh/test
+PYTHONPATH=src/phyai_discovery:src/phyai_discovery_ros:apps/junh python3 -m pytest -q src/phyai_discovery/test src/phyai_discovery_ros/test apps/junh/test
 ```
 
 For actual-model rotated-scene tests, disable unrelated globally installed pytest
@@ -512,7 +512,7 @@ plugins; they interfere with Hydra configuration resource lookup in this contain
 
 ```bash
 PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 MUJOCO_GL=egl JUNH_TEST_SAM2_CHECKPOINT="$PWD/apps/junh/.models/sam2.1_hiera_tiny.pt" \
-  PYTHONPATH=src/phyai_discovery:apps/junh apps/junh/.venv-sam2/bin/python -m pytest -q src/phyai_discovery/test/test_sam2_rendered.py
+  PYTHONPATH=src/phyai_discovery:src/phyai_discovery_ros:apps/junh apps/junh/.venv-sam2/bin/python -m pytest -q src/phyai_discovery/test/test_sam2_rendered.py
 ```
 
 Build/source the package first for ROS adapter tests. Without ROS, the adapter test
@@ -545,3 +545,12 @@ The original scene-pose demo remains available as `search_demo` or
 `python3 -m junh_master.legacy.demo`. It exercises simulator ground truth and is
 kept separate from camera discovery. App tests cover the ROS adapters, viewer,
 handoff, and this legacy example; shared-package tests cover the discovery feature.
+
+## Shared ROS adapter
+
+The live/recorded discovery transport now lives in
+[`phyai_discovery_ros`](../../src/phyai_discovery_ros/README.md).
+Junh keeps its `discovery` executable and `/junh/*` interfaces through a compatibility
+entry point. Other apps can launch the shared package without this app, viewer,
+master, MuJoCo, or SAM2. `run_sim.sh` builds the shared adapter automatically;
+rebuild once before using `--no-build` with an older workspace install.

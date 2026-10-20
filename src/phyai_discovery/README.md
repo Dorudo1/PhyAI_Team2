@@ -48,12 +48,16 @@ within their measurement bounds; replaying one view cannot settle a conflict.
 
 ## Install
 
-For ROS applications, add `<exec_depend>phyai_discovery</exec_depend>` to the
+For live ROS cameras, use the shared
+[`phyai_discovery_ros` adapter](../phyai_discovery_ros/README.md), which launches
+without the Junh app or MuJoCo and leaves motion to the consuming app.
+
+For Python-based ROS applications, add `<exec_depend>phyai_discovery</exec_depend>` to the
 consumer's `package.xml`. From the colcon workspace:
 
 ```bash
 source /opt/ros/humble/setup.bash
-colcon build --symlink-install --packages-up-to junh_master
+colcon build --symlink-install --packages-up-to phyai_discovery
 source install/setup.bash
 ```
 
@@ -180,8 +184,8 @@ The installed Python command `replay_scan` runs the same implementation.
 From the repository root:
 
 ```bash
-PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 PYTHONPATH=src/phyai_discovery:apps/junh \
-  python3 -m pytest -q src/phyai_discovery/test apps/junh/test
+PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 PYTHONPATH=src/phyai_discovery:src/phyai_discovery_ros:apps/junh \
+  python3 -m pytest -q src/phyai_discovery/test src/phyai_discovery_ros/test apps/junh/test
 ```
 
 With MuJoCo and a working EGL renderer installed, prefix that command with

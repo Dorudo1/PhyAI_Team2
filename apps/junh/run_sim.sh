@@ -69,8 +69,8 @@ mkdir -p "$SIM_WS"
 cd "$SIM_WS"
 if [ "$BUILD" = true ]; then
     colcon build --symlink-install \
-        --base-paths "$APP_DIR" "$REPO_ROOT/src/phyai_discovery" "$REPO_ROOT/sim/piper_mujoco_sim" \
-        --packages-select phyai_discovery junh_master piper_mujoco_sim
+        --base-paths "$APP_DIR" "$REPO_ROOT/src" "$REPO_ROOT/sim/piper_mujoco_sim" \
+        --packages-select phyai_discovery phyai_discovery_ros junh_master piper_mujoco_sim
 fi
 if [ ! -f "$SIM_WS/install/setup.bash" ]; then
     echo "Workspace install missing. Run without --no-build first." >&2
