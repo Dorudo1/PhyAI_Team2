@@ -2,15 +2,15 @@
 from launch import LaunchDescription
 from launch.actions import DeclareLaunchArgument
 from launch.conditions import IfCondition
-from launch.substitutions import LaunchConfiguration, PathJoinSubstitution
+from launch.substitutions import LaunchConfiguration, PathJoinSubstitution, EnvironmentVariable
 from launch_ros.actions import Node
 from launch_ros.substitutions import FindPackageShare
 
 
 def generate_launch_description():
     return LaunchDescription([
-        DeclareLaunchArgument('config_path', default_value=PathJoinSubstitution([
-            FindPackageShare('phyai_discovery_ros'), 'config', 'discovery.json'])),
+        DeclareLaunchArgument('config_path', default_value=EnvironmentVariable('PHYAI_DISCOVERY_CONFIG',
+            default_value=PathJoinSubstitution([FindPackageShare('phyai_discovery_ros'), 'config', 'discovery.json']))),
         DeclareLaunchArgument('recording_path', default_value=''),
         DeclareLaunchArgument('namespace', default_value=''),
         DeclareLaunchArgument('joint_states_topic', default_value='/joint_states'),

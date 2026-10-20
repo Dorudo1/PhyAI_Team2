@@ -23,11 +23,54 @@ colcon build --symlink-install --packages-up-to phyai_discovery_ros
 source install/setup.bash
 cp "$(ros2 pkg prefix --share phyai_discovery_ros)/config/discovery.json" /tmp/hardware.json
 # Edit /tmp/hardware.json for your installation before launching.
-ros2 launch phyai_discovery_ros discovery.launch.py config_path:=/tmp/hardware.json
+# Then, from the repository root (SAM2 is provisioned automatically):
+bash scripts/run_discovery.sh --config /tmp/hardware.json -- auto_scan:=false
 ```
 
-The default backend is depth only, requiring no model download or GPU. SAM2 is
-optional through the core's [configuration](../phyai_discovery/README.md#sam2-configuration).
+### Standard SAM2 workflow (developers and AI agents)
+
+Use the shared launcher for the advertised SAM2-assisted discovery backend:
+
+```bash
+# After building and sourcing the ROS workspace, from the repository root:
+bash scripts/run_discovery.sh --config /absolute/path/installation.json -- auto_scan:=false
+# After validating physical scan paths, use auto_scan:=true instead.
+```
+
+The launcher automatically creates/reuses `.discovery-sam2/`, installs pinned
+PyTorch/torchvision/SAM2 dependencies, downloads SAM2.1 tiny weights when missing,
+loads the real checkpoint to validate it, and writes a configuration with
+`segmentation.backend: sam2` and the correct absolute checkpoint path. It sources
+the Python dependency environment and launches discovery. Aligned RGB/depth is
+required. First use needs network access and several GB of disk space; later
+launches reuse the dependencies and checkpoint. Setup never silently falls back
+to depth-only segmentation.
+
+`--config` is a complete installation JSON: its camera, scan and table settings are
+preserved, and relative mask/intrinsics-file paths are made absolute. Setup changes
+only the generated copy's segmentation settings. Keep setup options before `--`
+and ROS launch arguments after it. Without `--config`, the shared observation-only
+camera template is used. Pass `--device cpu` to select CPU explicitly; `auto`
+chooses CUDA when available, otherwise CPU. Set `PHYAI_SAM2_RUNTIME_DIR` to choose
+another cache location. Do not put the generated environment or weights in Git.
+
+To provision without starting ROS:
+
+```bash
+bash scripts/setup_discovery_sam2.sh --config /absolute/path/installation.json
+source .discovery-sam2/env.sh
+ros2 launch phyai_discovery_ros discovery.launch.py
+```
+
+The generated environment exports `PHYAI_DISCOVERY_CONFIG` and
+`PHYAI_SAM2_CHECKPOINT`; the launch file picks that configuration automatically.
+Other apps can source this environment and set `segmentation.backend: sam2` with
+the checkpoint omitted to use the exported path. Agents should follow this shared
+workflow rather than invent a model path or invoke Junh-specific setup scripts.
+
+The raw JSON template remains depth-only for explicitly model-free tests. Direct
+`ros2 launch` without a provisioned environment uses that template; it does not
+install SAM2. The shared launcher above is the standard SAM2 path.
 The repository's app runtime builds include shared packages under `src/`.
 
 Set `joint_states_topic:=/your_arm/joint_states` when needed. The launch also
@@ -39,16 +82,17 @@ agree; use actual acquisition timestamps and capture-time TF.
 
 App runtime images include the shared packages under `src/`. For an app whose
 `start.sh` launches discovery, use the normal runtime runner. The Junh test app's
-default startup still sources its development SAM2 environment; that startup is
-not a ready-to-deploy hardware entry point. To test depth-only shared discovery
-from the Junh image, override its command explicitly:
+startup uses its local SAM2 environment in development and the provisioned model
+environment in runtime images. To run shared discovery without Junh's master and
+viewer, override the image command:
 
 ```bash
 # On the dev PC host, outside the devcontainer:
 bash scripts/build_runtime.sh junh
+# Discovery-dependent apps automatically provision SAM2 during this build.
 # Transfer/load the image on the control PC before running the command below.
 # Put your measured installation JSON and referenced calibration/mask files here:
-docker run --rm -it --network host \
+docker run --rm -it --network host --gpus all \
   -e ROS_DOMAIN_ID=43 \
   -v /absolute/path/to/discovery-config:/config:ro \
   phyai/app-junh:latest \
@@ -58,8 +102,14 @@ docker run --rm -it --network host \
 
 Use the host stack's ROS domain. Start observation-only, then enable
 `auto_scan:=true` with a `scan` configuration after physical poses and paths are
-validated. The example uses the depth backend; SAM2 needs explicit runtime model
-and dependency provisioning. Native package builds and ROS integration are tested;
+validated. The image contains pinned SAM2 dependencies and weights at
+`/opt/phyai-sam2`; its entry point exports the checkpoint and dependency paths.
+Your mounted installation JSON should set `segmentation.backend: sam2` and can
+omit `checkpoint` to use that exported path. Run the container with `--gpus all`
+when using CUDA (the standard runtime runner adds GPU access when available).
+`DISCOVERY_SAM2=false bash scripts/build_runtime.sh <app>` explicitly skips model
+provisioning for depth-only images; `DISCOVERY_SAM2=true` forces it for apps whose
+dependency is indirect. Native package builds and ROS integration are tested;
 the Docker image build and physical deployment remain unverified.
 
 ## Configure the real installation

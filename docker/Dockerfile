@@ -106,6 +106,17 @@ RUN --mount=type=bind,from=deps,source=/deps,target=/tmp/deps \
     && if [ -f requirements.txt ]; then pip3 install --no-cache-dir -r requirements.txt; fi \
     && rm -rf /var/lib/apt/lists/*
 
+# Shared discovery apps provision SAM2 at image build time, never during arm motion.
+ARG DISCOVERY_SAM2=false
+COPY src/phyai_discovery/phyai_discovery/setup_sam2.py /opt/phyai-sam2-tools/setup_sam2.py
+COPY src/phyai_discovery_ros/config/discovery.json /opt/phyai-sam2-tools/discovery.json
+RUN if [ "$DISCOVERY_SAM2" = true ]; then \
+      apt-get update && apt-get install -y --no-install-recommends git python3-venv libgomp1 \
+      && python3 /opt/phyai-sam2-tools/setup_sam2.py --runtime-dir /opt/phyai-sam2 \
+           --config /opt/phyai-sam2-tools/discovery.json --device cuda \
+      && rm -rf /var/lib/apt/lists/*; \
+    elif [ "$DISCOVERY_SAM2" != false ]; then echo 'DISCOVERY_SAM2 must be true or false' >&2; exit 1; fi
+
 # ---------------------------------------------------------------------------
 FROM app-deps AS build
 

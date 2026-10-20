@@ -104,7 +104,8 @@ ROS 앱은 [phyai_discovery_ros](src/phyai_discovery_ros/README.md)를 사용하
 # colcon 워크스페이스에서 실행
 colcon build --symlink-install --packages-up-to phyai_discovery_ros
 source install/setup.bash
-ros2 launch phyai_discovery_ros discovery.launch.py config_path:=/absolute/path/installation.json
+# 저장소 루트에서 실행: SAM2 설치와 모델 다운로드를 자동으로 수행합니다.
+bash scripts/run_discovery.sh --config /absolute/path/installation.json -- auto_scan:=false
 ```
 
 기본값은 관측 전용입니다. 설치 환경에 맞는 `scan` 설정과 검증된 이동 경로가 있으면
@@ -118,7 +119,9 @@ ros2 launch phyai_discovery_ros discovery.launch.py config_path:=/absolute/path/
 동일한 API를 `/junh/get_block_info`에서 조회해 블록 위치와 yaw를 표시합니다.
 
 실제 하드웨어의 경로·정확도와 Docker 런타임 배포는 아직 검증하지 않았습니다.
-Junh 기본 시작 스크립트는 개발용 SAM2 환경을 요구하므로 하드웨어 런타임에서는
+discovery 의존성을 선언한 앱은 런타임 이미지 빌드 시 SAM2와 모델을 자동으로 설치합니다.
+첫 개발 실행은 네트워크와 수 GB의 디스크 공간이 필요하며 이후에는 캐시를 재사용합니다.
+모델 경로는 자동으로 설정됩니다. 하드웨어 런타임에서는
 [공유 런타임 실행 방법](src/phyai_discovery_ros/README.md#runtime-image-launch)에 따라 명령을 재정의하세요.
 
 ### 의존성과 설치 파일

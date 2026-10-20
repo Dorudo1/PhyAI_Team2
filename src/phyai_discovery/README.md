@@ -171,12 +171,14 @@ feature = Discovery({
 })
 ```
 
-Omit segmentation or set `backend: depth` to use measured depth alone. For the
-current pinned SAM2 installation recipe, see
-[`apps/junh/setup_sam2.sh`](../../apps/junh/setup_sam2.sh). Its existing environment
-and checkpoint remain at `apps/junh/.venv-sam2` and `apps/junh/.models`; this
-refactor does not move or download model files. The integrated app can provision
-one shared runtime/checkpoint and inject its path into the same config.
+The standard shared [automatic SAM2 workflow](../phyai_discovery_ros/README.md#standard-sam2-workflow-developers-and-ai-agents)
+installs the pinned runtime, downloads and validates the checkpoint, and exports
+`PHYAI_SAM2_CHECKPOINT`. With that environment sourced, `backend: sam2` may omit
+`checkpoint` to use the exported path. An explicit checkpoint still takes precedence.
+
+Use `backend: depth` explicitly for model-free depth processing. Junh's setup helper
+is a compatibility wrapper around the shared installer and preserves its existing
+`.venv-sam2` and `.models` locations. Model files are not part of a Git clone.
 
 ## Recorded captures
 

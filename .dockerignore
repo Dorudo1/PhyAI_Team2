@@ -4,3 +4,7 @@
 **/log
 **/__pycache__
 .gitignore
+.discovery-sam2
+apps/junh/.venv-sam2
+apps/junh/.models
+apps/junh/.sam2-runtime

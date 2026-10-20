@@ -6,3 +6,7 @@ __pycache__/
 apps/junh/.venv-sam2/
 apps/junh/.models/
 log/
+
+# Shared discovery SAM2 environment, generated config, and downloaded weights
+.discovery-sam2/
+apps/junh/.sam2-runtime/

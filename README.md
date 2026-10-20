@@ -106,8 +106,14 @@ capture-time TF, stationary feedback checks, and workspace/progress topics:
 # From the colcon workspace; no Junh app or simulator is required.
 colcon build --symlink-install --packages-up-to phyai_discovery_ros
 source install/setup.bash
-ros2 launch phyai_discovery_ros discovery.launch.py config_path:=/absolute/path/hardware.json
+# From the repository root, after preparing your installation JSON:
+bash scripts/run_discovery.sh --config /absolute/path/hardware.json -- auto_scan:=false
 ```
+
+For SAM2-assisted discovery with automatic dependency/model setup, use
+`bash scripts/run_discovery.sh --config /absolute/path/installation.json -- auto_scan:=false`
+after sourcing the built workspace. See the shared guide for first-run downloads
+and runtime image provisioning. Direct launch with the raw template is depth-only.
 
 Copy the shared package's configuration template and set your measured camera,
 table, and sensor error settings first. Enable `auto_scan:=true` with configured

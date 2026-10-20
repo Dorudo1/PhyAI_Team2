@@ -67,6 +67,9 @@ def make_segmenter(config):
         return None
     if config.get('backend') != 'sam2':
         raise ValueError('Unknown segmentation backend.')
-    return SAM2Segmenter(config['checkpoint'],
+    checkpoint=config.get('checkpoint') or os.environ.get('PHYAI_SAM2_CHECKPOINT')
+    if not checkpoint:
+        raise ValueError('SAM2 checkpoint is not configured. Run scripts/setup_discovery_sam2.sh and source its env.sh.')
+    return SAM2Segmenter(checkpoint,
         config.get('model_config','configs/sam2.1/sam2.1_hiera_t.yaml'),
         config.get('device','cuda'), config.get('min_score',.7))

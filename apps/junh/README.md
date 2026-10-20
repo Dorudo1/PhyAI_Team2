@@ -573,3 +573,12 @@ during search; restarting a scan clears the queried inventory. See the shared
 
 Rebuild once before using `--no-build`: `phyai_discovery_interfaces` generates the
 new ROS service type and must be installed and sourced alongside the app.
+
+## Automatic SAM2 provisioning
+
+`setup_sam2.sh` now delegates to the shared installer, and `sam2_env.sh` provisions
+missing local dependencies/weights on first use. Existing Junh caches are reused.
+Other apps should use `scripts/run_discovery.sh`, which generates the checkpoint
+path and config automatically; see the [shared SAM2 workflow](../../src/phyai_discovery_ros/README.md#standard-sam2-workflow-developers-and-ai-agents).
+Discovery-dependent app images provision SAM2 during `scripts/build_runtime.sh`;
+Junh runtime startup uses that image environment rather than development files.
