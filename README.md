@@ -254,6 +254,43 @@ ROS_DOMAIN_ID=42 ros2 launch piper_mujoco_sim sim.launch.py
 A different configuration can be selected with `scene_config:=/absolute/path/config.json`.
 To load an existing MJCF instead, use `model_path:=/absolute/path/scene.xml`.
 
+### Use block scattering from your own app
+
+Scattering is provided by `piper_mujoco_sim` and does not require the Junh app,
+discovery nodes, or SAM 2. Build/source the simulator as above, then launch:
+
+```bash
+export ROS_DOMAIN_ID=43
+ros2 launch piper_mujoco_sim sim.launch.py \
+  http_port:=23518 publish_cameras:=true \
+  scatter_on_start:=true scatter_seed:=42 scatter_table:=all
+```
+
+Blocks scatter and settle before the first camera frame. Launch your own app in
+another sourced terminal using the same ROS domain. With the same scene/model,
+`scatter_seed:=42` reproduces the layout; omit it for a new random layout.
+`scatter_table` accepts `all`, `0_0`, `0_1`, `1_0`, or `1_1`.
+The shared launch defaults to aligned blocks unless `scatter_on_start:=true`.
+
+To change a running scene or restore its aligned startup layout:
+
+```bash
+ros2 run piper_mujoco_sim scatter_blocks scatter --seed 17 --url http://localhost:23518
+ros2 run piper_mujoco_sim scatter_blocks reset --url http://localhost:23518
+```
+
+Both actions also reset the robot and increment `restart_id` on `/sim/scene`.
+Your app should clear cached observations and restart its own task when that ID
+changes. The simulator does not automatically restart another app's state machine.
+Scattering/reset do not rewrite the scene file. This feature requires the lab
+scene selected through `scene_config`; custom `model_path` scenes do not support it.
+
+Apps can also POST JSON directly to `/simulation/blocks/scatter` with
+`{"seed":17,"table":"all"}`, or `/simulation/blocks/reset` with `{}` on the
+simulator's HTTP port. Responses include `restart_id` and block poses for test
+evaluation. Those poses are simulator ground truth, separate from camera-based
+perception. The HTTP client selects the simulator by URL, independently of ROS domain.
+
 ### ROS domain, port, and existing servers
 
 | Setting | Default | Purpose |

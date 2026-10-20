@@ -71,8 +71,8 @@ class InspectionPlanner:
 
     def pose(self, joints):
         self.data.qpos[self.addresses] = joints[:6]
-        self.data.qpos[self.model.joint('joint7').qposadr[0]] = .035
-        self.data.qpos[self.model.joint('joint8').qposadr[0]] = -.035
+        self.data.qpos[self.model.joint('joint7').qposadr[0]] = 0.0
+        self.data.qpos[self.model.joint('joint8').qposadr[0]] = 0.0
         mujoco.mj_kinematics(self.model, self.data)
         mujoco.mj_camlight(self.model, self.data)
         return (self.data.cam_xpos[self.camera].copy(),
@@ -93,7 +93,7 @@ class InspectionPlanner:
             q[5] = 0  # joint6 rolls the gripper, not the fixed camera on link5
             p, r = self.pose(q)
             if .24 < p[2] < .85 and r[2, 2] > .3 and r[2, 1] > .15:
-                self.pool.append([*q, .035])
+                self.pool.append([*q, 0.0])
                 self.positions.append(p)
                 self.rotations.append(r)
         self.pool = np.asarray(self.pool)
@@ -103,8 +103,8 @@ class InspectionPlanner:
     def _clear_path(self, initial, target):
         for t in np.linspace(0, 1, 25):
             self.data.qpos[self.addresses] = np.asarray(initial[:6])*(1-t)+np.asarray(target[:6])*t
-            self.data.qpos[self.model.joint('joint7').qposadr[0]] = .035
-            self.data.qpos[self.model.joint('joint8').qposadr[0]] = -.035
+            self.data.qpos[self.model.joint('joint7').qposadr[0]] = 0.0
+            self.data.qpos[self.model.joint('joint8').qposadr[0]] = 0.0
             mujoco.mj_forward(self.model, self.data)
             if any(contact.dist < -.001 for contact in self.data.contact):
                 return False

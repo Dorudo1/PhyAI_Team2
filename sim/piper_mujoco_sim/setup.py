@@ -20,6 +20,7 @@ setup(
     entry_points={
         'console_scripts': [
             'sim = piper_mujoco_sim.sim:main',
+            'scatter_blocks = piper_mujoco_sim.scatter_cli:main',
         ],
     },
 )

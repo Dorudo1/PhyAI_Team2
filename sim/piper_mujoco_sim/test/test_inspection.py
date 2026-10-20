@@ -29,10 +29,13 @@ def target(x=.12,y=.47):
 
 def test_focus_fits_image_and_joint_pose_is_novel_without_camera_edit(planner):
     geometry = scan_geometry(planner.model)
-    current = [0.,1.57,-1.3485,0.,0.,0.,.035]
+    current = [0.,1.57,-1.3485,0.,0.,0.,0.]
     first = planner.choose([target()],current,'close_1')
     assert first is not None and first['focus']=='uncertain_block'
+    assert first['joints'][6] == 0.0
     p,r = planner.pose(first['joints'])
+    for name in ('joint7', 'joint8'):
+        assert planner.data.qpos[planner.model.joint(name).qposadr[0]] == 0.0
     local = (np.array(target()['position'])-p)@r
     tangent = np.tan(np.deg2rad(geometry['cameras']['wrist']['fovy'])/2)
     assert abs(local[0])+.045 < -local[2]*tangent*4/3
@@ -46,7 +49,7 @@ def test_focus_fits_image_and_joint_pose_is_novel_without_camera_edit(planner):
 
 
 def test_simulator_object_truth_cannot_change_selected_view(planner):
-    current = [0.,1.57,-1.3485,0.,0.,0.,.035]
+    current = [0.,1.57,-1.3485,0.,0.,0.,0.]
     before = planner.choose([target()],current,'close_1')
     planner.reset()
     # Put simulator truth directly across the camera rays. These objects must
@@ -61,7 +64,7 @@ def test_simulator_object_truth_cannot_change_selected_view(planner):
 
 
 def test_unreachable_or_blocked_target_does_not_produce_motion(planner,monkeypatch):
-    current = [0.,1.57,-1.3485,0.,0.,0.,.035]
+    current = [0.,1.57,-1.3485,0.,0.,0.,0.]
     assert planner.choose([target(20,20)],current,'far') is None
     monkeypatch.setattr(planner,'_clear_path',lambda initial,target:False)
     assert planner.choose([target()],current,'blocked') is None
@@ -70,7 +73,7 @@ def test_unreachable_or_blocked_target_does_not_produce_motion(planner,monkeypat
 
 def test_higher_urgency_precedes_easy_target_and_attempts_are_bounded(planner):
     planner.max_views_per_block=1
-    current=[0.,1.57,-1.3485,0.,0.,0.,.035]
+    current=[0.,1.57,-1.3485,0.,0.,0.,0.]
     urgent=target();urgent['id']='provisional';urgent['priority']=3
     easy=target(-.3,-.15);easy['id']='supported';easy['priority']=1
     first=planner.choose([easy,urgent],current,'first')

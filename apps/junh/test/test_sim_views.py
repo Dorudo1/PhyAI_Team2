@@ -26,7 +26,11 @@ def test_scan_views_are_upright_varied_and_paths_clear_the_scene():
     positions, pitches = [], []
     previous = data.qpos[addresses].copy()
     for label in labels:
-        target = np.array(config['sim_scan']['targets'][label][:6])
+        commanded = config['sim_scan']['targets'][label]
+        assert commanded[6] == 0.0
+        data.qpos[model.joint('joint7').qposadr[0]] = commanded[6]
+        data.qpos[model.joint('joint8').qposadr[0]] = -commanded[6]
+        target = np.array(commanded[:6])
         assert np.all(target >= limits[:, 0]) and np.all(target <= limits[:, 1])
         for blend in np.linspace(0, 1, 31):
             data.qpos[addresses] = previous + blend*(target-previous)

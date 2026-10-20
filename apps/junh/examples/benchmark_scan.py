@@ -105,7 +105,8 @@ def main():
                     if planner and search.inspection_round:
                         focus = inspection_targets(discovery.workspace.hypotheses,search.assessment)
                         plan = planner.choose(focus,
-                                              [*data.qpos[joint_addresses],.035],viewpoint)
+                                              [*data.qpos[joint_addresses],
+                                               data.qpos[model.joint('joint7').qposadr[0]]],viewpoint)
                         if plan:target=plan['joints']
                         elif focus:
                             discovery.finish('No clear novel targeted views remain within the per-object inspection budget.',

@@ -131,6 +131,7 @@ The startup log prints `AUTO_SEARCH=true` or `false`. The driver reports its
 waiting reason, including missing feedback, paused simulation, or non-simulator
 command subscribers. Open the browser to watch motion and inspect `/junh/discovery`, `/junh/status`, and
 `/junh/scan_status`. The live workspace viewer updates from the accepted captures.
+The gripper stays closed (`joint7=0`) throughout survey and inspection.
 The survey is fixed; reserve captures adapt to uncertain detected objects within
 a bounded budget. A completed sequence can still produce a partial map and uncertain
 tracks. Picking readiness remains false.

@@ -108,7 +108,8 @@ def test_invalid_request_preserves_scene_and_baseline(scene, options):
     assert scatter.baseline is None
 
 
-def test_cli_http_and_simulator_restart_restore_baseline(scene):
+@pytest.mark.parametrize('client',['shared','junh'])
+def test_cli_http_and_simulator_restart_restore_baseline(scene,client):
     pytest.importorskip('rclpy')
     from piper_mujoco_sim.sim import PiperMujocoSim
     model, data, config, scatter = scene
@@ -128,9 +129,13 @@ def test_cli_http_and_simulator_restart_restore_baseline(scene):
     thread = threading.Thread(target=server.serve_forever, daemon=True)
     thread.start()
     script = Path(__file__).parents[3]/'apps/junh/scatter_blocks.py'
+    if client=='junh' and not script.exists():
+        pytest.skip('Junh compatibility wrapper is not included in this checkout')
+    command=([sys.executable,'-m','piper_mujoco_sim.scatter_cli'] if client=='shared'
+             else [sys.executable,str(script)])
     try:
         for action, extra in [('scatter', ['--seed', '1']), ('scatter', ['--seed', '9']), ('reset', [])]:
-            result = subprocess.run([sys.executable, str(script), action,
+            result = subprocess.run([*command, action,
                 '--url', f'http://127.0.0.1:{server.server_port}', *extra],
                 capture_output=True, text=True, timeout=10)
             assert result.returncode == 0, result.stderr
