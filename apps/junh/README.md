@@ -4,21 +4,25 @@ This app discovers table geometry and blocks from aligned RGB-D measurements, me
 observations from overhead and wrist cameras, and publishes a partial workspace
 map for the master. The MuJoCo launch includes an automatic multi-view driver that
 moves the simulated arm and captures wrist views. The standalone discovery node
-is read-only; hardware search motion and picking/stacking remain unimplemented.
+is observation-only by default. The shared ROS launch can enable configured PIPER
+scan motion with `auto_scan:=true`; physical paths and accuracy remain unvalidated.
+Picking/stacking remain unimplemented.
 SAM 2 masks and known block geometry support pose estimation. Uncertain
 observations remain hypotheses; only confirmed objects receive block IDs.
 Finishing the scan does not establish a complete table map or picking readiness.
 
 The implementation follows the [simple search plan](docs/implementation-plan.md).
 The independent [safeguard](../safeguard/docs/implementation-plan.md), hardware
-motion integration, and picking/stacking remain separate future work.
+motion validation, dynamic targeted-view planning for hardware, and picking/stacking
+remain separate work. Shared configured-pose scan execution is implemented.
 
 ## Reuse discovery in the integrated app
 
 The reusable feature lives in [`src/phyai_discovery`](../../src/phyai_discovery/README.md).
 It owns RGB-D detection, optional SAM2 segmentation, workspace fusion, scan state,
 and the workspace/search result contract. It requires NumPy; ROS, MuJoCo, the web
-viewer, and the master are adapters in this test app. Both live discovery and
+viewer, and the master are adapters. Shared ROS transport and PIPER scan execution
+live in `phyai_discovery_ros`; `phyai_discovery_interfaces` provides `GetBlockInfo`. Both live discovery and
 recording replay use the shared `Discovery` lifecycle. Import feature types directly
 from `phyai_discovery`; the temporary forwarding modules in `junh_master` have
 been removed.
@@ -408,6 +412,8 @@ also under `share/junh_master/config`. Discovery publishes:
 | --- | --- |
 | `/junh/discovery` (`std_msgs/String`, JSON) | Versioned workspace, capture progress/result, source ages, and errors |
 | `/junh/search_progress` (`std_msgs/String`, JSON) | Small 5 Hz scan-control heartbeat, independent of full map publication |
+| `/junh/state` (`std_msgs/String`, transient-local JSON) | Discovery state, finished flag, session/revision, frame and final outcome |
+| `/junh/get_block_info` (`phyai_discovery_interfaces/srv/GetBlockInfo`) | Query all confirmed blocks or one ID after search completion |
 | `/junh/status` (`std_msgs/String`, JSON) | Master handoff, inventory stability, pending policy, and `pick_ready: false` |
 | `/junh/workspace_markers` (`visualization_msgs/MarkerArray`) | Surface coverage, block geometry, IDs, quality/age, and scan status |
 | `/junh/overhead/overlay`, `/junh/wrist/overlay` (`sensor_msgs/Image`) | Optional accepted RGB images with candidate rectangles |
@@ -416,7 +422,8 @@ Green cells show observed tabletop; amber cells show uncertain evidence; grey
 cells show unobserved configured scope. Old observations are purple. Blue boxes
 are provisional rectangular fits and orange boxes are unresolved groups. A dead
 discovery publisher marks the retained map stale. The viewer consumes the same
-snapshot as the master; it does not run another detector.
+live snapshot as the master while searching. After completion it queries
+`GetBlockInfo` for the displayed confirmed inventory; it does not run another detector.
 
 `scope`, when supplied, is `[xmin,xmax,ymin,ymax]` in the fixed robot frame and
 specifies where to report coverage. It does not specify table geometry or grant
@@ -504,6 +511,9 @@ motion here.
 
 ```bash
 source /opt/ros/humble/setup.bash
+# From your colcon workspace, build --packages-up-to junh_master first.
+source /absolute/path/to/workspace/install/setup.bash
+# Then run from this repository root:
 PYTHONPATH=src/phyai_discovery:src/phyai_discovery_ros:apps/junh python3 -m pytest -q src/phyai_discovery/test src/phyai_discovery_ros/test apps/junh/test
 ```
 

@@ -1,22 +1,44 @@
 # Block search implementation plan
 
-## Implemented scope
+## Current implemented scope
 
-The Junh app estimates tabletop geometry and block candidates from overhead and
-wrist RGB-D measurements. Observations are merged into a progressively improving
-workspace map and shown in a browser or RViz. The master consumes that map and
-can wait for the teammate stacking model independently of discovery.
+Discovery is shared across three packages: `phyai_discovery` owns RGB-D detection,
+workspace fusion and search state; `phyai_discovery_ros` owns transport and optional
+PIPER scan execution; `phyai_discovery_interfaces` defines `GetBlockInfo`.
+Junh is a test app with simulator integration, browser visualization and prototype
+handoff. Its ROS entry point preserves `/junh/*` names.
 
-The MuJoCo launch performs automatic searching through eight predefined swivel
-views. Hardware-camera discovery remains read-only while the independent
-[safeguard](../../safeguard/docs/implementation-plan.md) is deferred. The original
-scene-pose example is isolated in `junh_master/legacy/sim_adapter.py`; the camera detector does not
-consume simulator block poses or IDs.
+The shared controller executes configured survey/reserve joint poses using the
+MuJoCo-compatible position-command bridge contract. It verifies feedback freshness,
+arrival including the closed gripper, settling and capture acknowledgement. The
+shared launch enables it with `auto_scan:=true`; observation-only is the default.
+Junh's MuJoCo extension reuses that controller with simulated time, pause/restart
+checks and geometry-based targeted inspection. The current example has eleven
+survey poses and eight reserve poses, plus the initial overhead capture.
 
-See the [README](../README.md) for live simulation, camera configuration, recorded
-input, manual capture controls, and known detector limitations.
+The browser queries `GetBlockInfo` after search completion, displays position/yaw
+and full selected-block information, and rejects obsolete session/revision replies.
+The state topic and query metadata derive from the existing search state machine.
+JSON intrinsics and CameraInfo are both supported; extrinsics remain capture-time TF.
 
-## Requirements
+Hardware trajectories, collision/path validation, real-camera accuracy and runtime
+Docker deployment remain unverified. Dynamic targeted inspection for hardware,
+the independent safeguard and picking/stacking are not implemented. The camera
+detector never consumes simulator block poses or IDs.
+
+Use the [Junh README](../README.md) for current test-app commands and the
+[shared integration guide](../../../src/phyai_discovery_ros/README.md) for the
+bridge contract, calibration, automatic scans, runtime launch and query API.
+
+## Historical design and validation notes
+
+The sections below preserve earlier planning stages and measurements, including
+older eight-view scans and read-only hardware assumptions. They are historical
+records, not the current launch contract. The current scope above and linked
+READMEs supersede those descriptions; historical timing/count results do not
+establish performance for the current scan profile or physical hardware.
+
+### Requirements
 
 - Block count, positions, rotations, and arrangement are unknown at startup.
 - Overhead field of view is insufficient for whole-table discovery. Wrist views
@@ -31,7 +53,7 @@ input, manual capture controls, and known detector limitations.
   map sessions, and revisions throughout the pipeline.
 - Keep hardware motion validation and execution in the separate safeguard app.
 
-## Architecture
+### Architecture
 
 | Component | Responsibility |
 | --- | --- |
@@ -57,7 +79,7 @@ Geometry processing runs in a single worker rather than camera callbacks. Queues
 and pending frames are bounded. Perception and visualization do not generate
 hardware commands; the simulation driver is absent from `master.launch.py`.
 
-## Inputs and calibration
+### Inputs and calibration
 
 Require matching camera intrinsics, depth scale, overhead-to-robot extrinsics,
 and wrist-camera-to-mount calibration. Use timestamped joint feedback and the
@@ -79,7 +101,7 @@ provide block geometry to perception. Real-camera use requires its own robot
 mask/filter or rejection of contaminated views; full hardware self-filtering
 remains deferred.
 
-## Capture procedure
+### Capture procedure
 
 ```text
 WAIT_FOR_INPUTS -> CAPTURE_OVERHEAD -> DETECT_AND_MERGE
@@ -116,7 +138,7 @@ waits for convergence and settling before requesting each capture, avoids duplic
 requests, and freezes interpolation when simulation is paused. Faults halt the
 scan; these development checks are not a hardware safeguard.
 
-## Detection and incremental merging
+### Detection and incremental merging
 
 For each capture:
 
@@ -154,7 +176,7 @@ Keep the scene static during one scan. Moving blocks, grasp/release, or calibrat
 changes require a restart or explicit invalidation. Absence from a later view
 alone does not prove that a previously seen block vanished.
 
-## Minimal workspace map
+### Minimal workspace map
 
 Maintain the table plane, bounds of observed surface patches, a coarse top-down
 coverage grid, block tracks, unresolved groups, source timestamps, session ID,
@@ -170,7 +192,7 @@ remain history, visibly marked with age; they need not all be simultaneously fre
 A configured scope specifies where coverage is reported, not a known table shape
 or motion permission. Without adequate scope/quality evidence the result is partial.
 
-## Contracts
+### Contracts
 
 | Record | Fields |
 | --- | --- |
@@ -186,7 +208,7 @@ integration decision. The master tolerates measured geometry variation, rejects
 old sessions, and exposes inventory stability and partial results. Proposals do
 not execute motion or increase verified stack height.
 
-## Performance boundaries
+### Performance boundaries
 
 - Use the newest pending observation and bound camera/mask histories.
 - Retry a pending frame when its matching mask or capture-time TF arrives; expire
@@ -201,7 +223,7 @@ not execute motion or increase verified stack height.
 - Generate RViz markers only when a viewer subscribes. Browser-map polling is
   read-only and independent of camera rendering.
 
-## Visualization
+### Visualization
 
 RViz markers and the local browser page both consume the same discovery snapshot.
 The browser shows top-down estimated footprints and coverage, with pan/zoom,
@@ -216,7 +238,7 @@ simulator port forwarded. The simulator header switches views in the same tab.
 The backend is also directly available at `http://localhost:23518`.
 `WORKSPACE_PORT` can override the default backend port (simulator port plus one). The standalone camera launch enables the web view only when configured.
 
-## Coordinated restart
+### Coordinated restart
 
 The simulator's Restart simulation button resets physics and increments its
 restart ID. Discovery observes that ID, creates a new map session, clears tracks
@@ -229,7 +251,7 @@ only for the new epoch with fresh feedback.
 restart does not need that separate manual service call. The browser map clears
 old selections on session changes and shows the new search progress.
 
-## Migration and milestones
+### Migration and milestones
 
 The scene-based `discover()` is isolated in the simulator adapter. Real discovery
 and the master use sensor-independent contracts; simulator clocks/restart details
@@ -248,7 +270,7 @@ Validate with synthetic depth, recorded observations, ROS integration, and live
 MuJoCo rendering. Sensor-specific accuracy and threshold tuning require measured
 camera recordings and installation validation.
 
-## Verification evidence
+### Verification evidence
 
 Tests cover depth stride/encoding, calibration/transform validation, unknown
 count and yaw from pixels, noise/ROI/masks, clipped/irregular groups, track association,
@@ -279,7 +301,7 @@ model-free suite skips the two explicitly enabled model integration cases.
 The browser JavaScript's drawing, selection, and stale indication were exercised
 with a DOM/canvas harness; on-screen browser inspection remains useful during use.
 
-## Deferred work and remaining installation decisions
+### Deferred work and remaining installation decisions
 
 - Hardware motion planning/execution through the independent safeguard.
 - Collision/free-space mapping, adaptive viewpoint selection, and boundary exploration.
@@ -294,7 +316,7 @@ fit/association thresholds, search scope, and measured acceptance tolerances bef
 hardware deployment. The simulator's fixed swivel targets are development fixtures,
 not hardware trajectories or proof of complete workspace coverage.
 
-## Discovery identity correction validation
+### Discovery identity correction validation
 
 The SAM 2 live MuJoCo scan accepts nine captures and produces six confirmed block
 IDs, zero remaining provisional hypotheses, and no extra identities for the six
@@ -307,7 +329,7 @@ Run the real-model tests with `MUJOCO_GL=egl`, an explicit
 do not download model weights. Restart clears confirmed tracks, hypotheses,
 alternatives, support views, and counters together.
 
-## Bounded evidence-driven inspection
+### Bounded evidence-driven inspection
 
 The simulation now has an initial eight-view sweep and two reserve sweeps with
 different shoulder/elbow configurations. Search compares explored coverage and

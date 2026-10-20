@@ -190,7 +190,8 @@ The installed Python command `replay_scan` runs the same implementation.
 
 ## Verify
 
-From the repository root:
+Build/source the ROS workspace first for adapter tests, including the generated
+`phyai_discovery_interfaces` package. Then, from the repository root:
 
 ```bash
 PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 PYTHONPATH=src/phyai_discovery:src/phyai_discovery_ros:apps/junh \

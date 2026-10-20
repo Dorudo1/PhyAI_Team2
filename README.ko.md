@@ -76,7 +76,7 @@ apps/<name>/
 ```
 
 `<name>`에는 영문 소문자, 숫자, `-`, `_`를 사용합니다. ROS 패키지 이름은 저장소 전체에서 고유해야 합니다.
-런타임 빌드는 `apps/<name>/`만 복사하므로 앱 파일은 이 폴더 안에 둡니다.
+앱 파일은 `apps/<name>/` 안에 둡니다. 런타임 빌드는 해당 앱과 `src/`의 공유 패키지를 포함합니다.
 
 ### 로봇 인터페이스
 
@@ -93,6 +93,33 @@ apps/<name>/
 
 임시 토픽과 카메라 이름은 호스트 스택 담당자가 확정합니다. 팔 명령은 현재 `piper_ros` 규칙을 따릅니다.
 브리지가 커스텀 메시지를 사용하면 해당 패키지를 base 이미지에 추가해야 합니다.
+
+### 다른 앱에서 discovery 사용
+
+[공유 discovery](src/phyai_discovery/README.md)는 RGB-D에서 블록 위치와 자세를 추정합니다.
+ROS 앱은 [phyai_discovery_ros](src/phyai_discovery_ros/README.md)를 사용하면 됩니다.
+`package.xml`에 `<exec_depend>phyai_discovery_ros</exec_depend>`를 추가하세요.
+
+```bash
+# colcon 워크스페이스에서 실행
+colcon build --symlink-install --packages-up-to phyai_discovery_ros
+source install/setup.bash
+ros2 launch phyai_discovery_ros discovery.launch.py config_path:=/absolute/path/installation.json
+```
+
+기본값은 관측 전용입니다. 설치 환경에 맞는 `scan` 설정과 검증된 이동 경로가 있으면
+`auto_scan:=true`로 공유 PIPER 제어기가 팔 이동과 촬영을 수행합니다. 시뮬레이터와
+실제 브리지는 같은 토픽·메시지 규칙을 사용하고, `ROS_DOMAIN_ID`로 환경을 선택합니다.
+카메라 내부 파라미터는 CameraInfo 또는 JSON 파일로 제공하며, 외부 파라미터는 촬영 시각의 TF를 사용합니다.
+
+검색 완료 후 `/discovery/get_block_info`의
+`phyai_discovery_interfaces/srv/GetBlockInfo` 서비스로 블록 정보를 조회할 수 있습니다.
+`/discovery/state`는 검색 상태와 세션·리비전을 제공합니다. Junh 브라우저는 검색이 끝나면
+동일한 API를 `/junh/get_block_info`에서 조회해 블록 위치와 yaw를 표시합니다.
+
+실제 하드웨어의 경로·정확도와 Docker 런타임 배포는 아직 검증하지 않았습니다.
+Junh 기본 시작 스크립트는 개발용 SAM2 환경을 요구하므로 하드웨어 런타임에서는
+[공유 런타임 실행 방법](src/phyai_discovery_ros/README.md#runtime-image-launch)에 따라 명령을 재정의하세요.
 
 ### 의존성과 설치 파일
 

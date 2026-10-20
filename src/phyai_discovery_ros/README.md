@@ -35,6 +35,33 @@ accepts `namespace` and `recording_path`; relative output/service names below ga
 that namespace. Camera topic names come from JSON. Driver and adapter clocks must
 agree; use actual acquisition timestamps and capture-time TF.
 
+## Runtime image launch
+
+App runtime images include the shared packages under `src/`. For an app whose
+`start.sh` launches discovery, use the normal runtime runner. The Junh test app's
+default startup still sources its development SAM2 environment; that startup is
+not a ready-to-deploy hardware entry point. To test depth-only shared discovery
+from the Junh image, override its command explicitly:
+
+```bash
+# On the dev PC host, outside the devcontainer:
+bash scripts/build_runtime.sh junh
+# Transfer/load the image on the control PC before running the command below.
+# Put your measured installation JSON and referenced calibration/mask files here:
+docker run --rm -it --network host \
+  -e ROS_DOMAIN_ID=43 \
+  -v /absolute/path/to/discovery-config:/config:ro \
+  phyai/app-junh:latest \
+  ros2 launch phyai_discovery_ros discovery.launch.py \
+  config_path:=/config/installation.json auto_scan:=false
+```
+
+Use the host stack's ROS domain. Start observation-only, then enable
+`auto_scan:=true` with a `scan` configuration after physical poses and paths are
+validated. The example uses the depth backend; SAM2 needs explicit runtime model
+and dependency provisioning. Native package builds and ROS integration are tested;
+the Docker image build and physical deployment remain unverified.
+
 ## Configure the real installation
 
 The installed JSON is a template, not measured calibration. Set:
@@ -187,6 +214,8 @@ The default names at the root namespace are:
 | Interface | Purpose |
 | --- | --- |
 | `/discovery/workspace` | Core `workspace` + `search` snapshot, input status and errors |
+| `/discovery/state` | Latched compact discovery state, completion flag and inventory identity |
+| `/discovery/get_block_info` | GetBlockInfo service for the finished inventory |
 | `/discovery/search_progress` | Scan state, requested `search.target`, inspection targets |
 | `/discovery/overhead/overlay`, `/discovery/wrist/overlay` | Annotated RGB, when RGB is supplied |
 | `/discovery/capture` | Request the next wrist observation after positioning |
