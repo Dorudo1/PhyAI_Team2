@@ -4,6 +4,8 @@ from pathlib import Path
 import threading
 from http.server import BaseHTTPRequestHandler
 from urllib.parse import parse_qs, urlparse
+from urllib.request import urlopen
+from urllib.error import URLError
 
 
 VIEWER_PAGE = Path(__file__).with_name('viewer.html').read_bytes()
@@ -27,7 +29,7 @@ class FrameHub:
             return self.frame_id, self.jpeg
 
 
-def make_handler(hubs, editor=None, scene_editing=False, restart=None):
+def make_handler(hubs, editor=None, scene_editing=False, restart=None, workspace_port=0, block_action=None):
     class Handler(BaseHTTPRequestHandler):
         def log_message(self, *args):
             pass
@@ -51,6 +53,18 @@ def make_handler(hubs, editor=None, scene_editing=False, restart=None):
             elif request.path == '/edit/scene':
                 self.respond(200, editor.snapshot() if editor else {
                     'enabled': False, 'message': 'Scene editing requires the lab scene; custom MJCF models are view-only.'})
+            elif request.path == '/workspace-link':
+                self.respond(200, {'port': workspace_port, 'url': '/workspace' if workspace_port else None})
+            elif request.path in ('/workspace', '/workspace/', '/api/workspace'):
+                if not workspace_port:
+                    self.respond(404, b'Workspace viewer is not enabled for this launch.', 'text/plain')
+                    return
+                upstream_path = '/api/workspace' if request.path == '/api/workspace' else '/'
+                try:
+                    with urlopen(f'http://127.0.0.1:{workspace_port}{upstream_path}', timeout=2) as upstream:
+                        self.respond(200, upstream.read(), upstream.headers.get('Content-Type', 'application/octet-stream'))
+                except (URLError, TimeoutError, OSError):
+                    self.respond(503, b'Workspace viewer is unavailable. Check the workspace_viewer launch logs, then reload this page.', 'text/plain')
             elif request.path == '/stream':
                 name = parse_qs(request.query).get('view', ['overview'])[0]
                 if name not in hubs:
@@ -63,13 +77,17 @@ def make_handler(hubs, editor=None, scene_editing=False, restart=None):
         def do_POST(self):
             action = urlparse(self.path).path
             if action not in ('/edit/scene/preview', '/edit/scene/save', '/edit/scene/revert',
-                              '/edit/scene/pause', '/edit/scene/reload', '/simulation/restart'):
+                              '/edit/scene/pause', '/edit/scene/reload', '/simulation/restart',
+                              '/simulation/blocks/scatter', '/simulation/blocks/reset'):
                 self.respond(404, {'error': 'Unknown editor action.'})
                 return
             if action == '/simulation/restart' and restart is None:
                 self.respond(409, {'error': 'Simulation restart is unavailable.'})
                 return
-            if action != '/simulation/restart' and editor is None:
+            if action.startswith('/simulation/blocks/') and block_action is None:
+                self.respond(409, {'error': 'Block scattering requires the lab scene.'})
+                return
+            if not action.startswith('/simulation/') and editor is None:
                 self.respond(409, {'error': 'Scene editing is unavailable for custom models.'})
                 return
             # Browser writes come from this UI, never cross-origin form submissions.
@@ -87,7 +105,10 @@ def make_handler(hubs, editor=None, scene_editing=False, restart=None):
                 payload = json.loads(self.rfile.read(length))
                 if not isinstance(payload, dict):
                     raise ValueError('Expected an object.')
-                result = restart() if action == '/simulation/restart' else editor.action(action.rsplit('/', 1)[1], payload)
+                if action.startswith('/simulation/blocks/'):
+                    result = block_action(action.rsplit('/', 1)[1], payload)
+                else:
+                    result = restart() if action == '/simulation/restart' else editor.action(action.rsplit('/', 1)[1], payload)
                 self.respond(200, result)
             except (ValueError, KeyError, TypeError) as error:
                 self.respond(400, {'error': str(error)})

@@ -32,9 +32,10 @@
   },
 
   // MuJoCo simulator browser view (sim.launch.py http_port)
-  "forwardPorts": [23517],
+  "forwardPorts": [23517, 23518],
   "portsAttributes": {
-    "23517": { "label": "MuJoCo view", "onAutoForward": "silent" }
+    "23517": { "label": "MuJoCo view", "onAutoForward": "silent" },
+    "23518": { "label": "App workspace map", "onAutoForward": "silent" }
   },
 
   "mounts": [

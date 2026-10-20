@@ -76,7 +76,8 @@ apps/<name>/
 ```
 
 Use lowercase letters, digits, `-`, and `_` for `<name>`. ROS package names must be unique across
-the repo. Keep app files inside `apps/<name>/`; runtime builds copy only that directory.
+the repo. Keep app files inside `apps/<name>/`; runtime builds include that app and the shared
+packages under `src/`.
 
 ### Robot interface
 
@@ -93,6 +94,28 @@ Your app publishes targets; the simulator or control PC bridge receives them and
 
 The host stack administrator confirms provisional topics and camera names. Arm commands currently
 follow the `piper_ros` convention. If the bridge uses custom messages, add their package to the base image.
+
+### Use discovery in your own app
+
+The shared [discovery core](src/phyai_discovery/README.md) accepts calibrated RGB-D
+captures directly from Python. ROS apps can use
+[`phyai_discovery_ros`](src/phyai_discovery_ros/README.md) for live cameras,
+capture-time TF, stationary feedback checks, and workspace/progress topics:
+
+```bash
+# From the colcon workspace; no Junh app or simulator is required.
+colcon build --symlink-install --packages-up-to phyai_discovery_ros
+source install/setup.bash
+ros2 launch phyai_discovery_ros discovery.launch.py config_path:=/absolute/path/hardware.json
+```
+
+Copy the shared package's configuration template and set your measured camera,
+table, and sensor error settings first. Enable `auto_scan:=true` with configured
+scan poses to let the shared PIPER controller move and capture, or have your app
+own movement and request captures. Junh adds simulator-specific geometry planning
+to the shared scan controller; physical scan poses and paths still require
+installation validation. The shared adapter is available for hardware
+integration; real-sensor accuracy and hardware trajectories still need validation.
 
 ### Dependencies and installed files
 
@@ -175,7 +198,7 @@ Restart keeps active scene settings and does not save or reload the JSON file.
 | Through SSH | Forward the port in VS Code's **Ports** panel, then use `http://localhost:23517` |
 
 Use the printed URL if you set another port. Rendering uses offscreen GPU/EGL and streams video;
-no desktop display is needed. The simulator is development-only. The browser includes virtual camera views; ROS camera topics and `/tf` are not published yet.
+no desktop display is needed. The simulator is development-only. The browser includes virtual camera views. Enable `publish_cameras:=true` to publish rendered RGB-D, CameraInfo, and camera/base transforms on `/tf` for perception apps.
 Its model comes from [MuJoCo Menagerie](https://github.com/google-deepmind/mujoco_menagerie/tree/main/agilex_piper).
 
 ### Lab scene and camera views
@@ -253,6 +276,43 @@ ROS_DOMAIN_ID=42 ros2 launch piper_mujoco_sim sim.launch.py
 
 A different configuration can be selected with `scene_config:=/absolute/path/config.json`.
 To load an existing MJCF instead, use `model_path:=/absolute/path/scene.xml`.
+
+### Use block scattering from your own app
+
+Scattering is provided by `piper_mujoco_sim` and does not require the Junh app,
+discovery nodes, or SAM 2. Build/source the simulator as above, then launch:
+
+```bash
+export ROS_DOMAIN_ID=43
+ros2 launch piper_mujoco_sim sim.launch.py \
+  http_port:=23518 publish_cameras:=true \
+  scatter_on_start:=true scatter_seed:=42 scatter_table:=all
+```
+
+Blocks scatter and settle before the first camera frame. Launch your own app in
+another sourced terminal using the same ROS domain. With the same scene/model,
+`scatter_seed:=42` reproduces the layout; omit it for a new random layout.
+`scatter_table` accepts `all`, `0_0`, `0_1`, `1_0`, or `1_1`.
+The shared launch defaults to aligned blocks unless `scatter_on_start:=true`.
+
+To change a running scene or restore its aligned startup layout:
+
+```bash
+ros2 run piper_mujoco_sim scatter_blocks scatter --seed 17 --url http://localhost:23518
+ros2 run piper_mujoco_sim scatter_blocks reset --url http://localhost:23518
+```
+
+Both actions also reset the robot and increment `restart_id` on `/sim/scene`.
+Your app should clear cached observations and restart its own task when that ID
+changes. The simulator does not automatically restart another app's state machine.
+Scattering/reset do not rewrite the scene file. This feature requires the lab
+scene selected through `scene_config`; custom `model_path` scenes do not support it.
+
+Apps can also POST JSON directly to `/simulation/blocks/scatter` with
+`{"seed":17,"table":"all"}`, or `/simulation/blocks/reset` with `{}` on the
+simulator's HTTP port. Responses include `restart_id` and block poses for test
+evaluation. Those poses are simulator ground truth, separate from camera-based
+perception. The HTTP client selects the simulator by URL, independently of ROS domain.
 
 ### ROS domain, port, and existing servers
 

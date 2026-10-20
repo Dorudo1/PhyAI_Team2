@@ -1,0 +1,50 @@
+{
+  "map_frame": "base_link",
+  "viewpoints": [
+    "wrist_1",
+    "wrist_2"
+  ],
+  "scope": null,
+  "cell_size": 0.02,
+  "capture_timeout": 15.0,
+  "max_retries": 2,
+  "input_max_age": 1.0,
+  "stationary_seconds": 0.5,
+  "stationary_tolerance": 0.003,
+  "feedback_timeout": 1.0,
+  "detector": {
+    "known_block_size": [
+      0.075,
+      0.025,
+      0.015
+    ]
+  },
+  "cameras": {
+    "overhead": {
+      "depth_topic": "/overhead/depth/image_rect_raw",
+      "info_topic": "/overhead/depth/camera_info",
+      "depth_scale": 0.001,
+      "roi": null,
+      "mask": null,
+      "rgb_topic": "/overhead/color/image_rect_raw",
+      "calibration_revision": "installation_v1",
+      "rectified": true
+    },
+    "wrist": {
+      "depth_topic": "/wrist/depth/image_rect_raw",
+      "info_topic": "/wrist/depth/camera_info",
+      "depth_scale": 0.001,
+      "roi": null,
+      "mask": null,
+      "rgb_topic": "/wrist/color/image_rect_raw",
+      "calibration_revision": "installation_v1",
+      "rectified": true
+    }
+  },
+  "segmentation": {
+    "backend": "sam2",
+    "checkpoint": "${JUNH_SAM2_CHECKPOINT}",
+    "device": "cuda",
+    "min_score": 0.7
+  }
+}

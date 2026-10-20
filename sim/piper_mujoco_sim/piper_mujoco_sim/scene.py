@@ -33,8 +33,10 @@ def reset_scene(model, data, config=None):
 
 def scene_snapshot(model, data, config, paused=False, restart_id=0):
     """Simulator-only ground-truth poses for ROS example planning and checks."""
+    from .inspection import scan_geometry
     return {
         'simulation_time': float(data.time), 'paused': paused, 'restart_id': restart_id,
+        'scan_geometry': scan_geometry(model),
         'robot': {
             'base_position': model.body('base_link').pos.tolist(),
             'base_quaternion': model.body('base_link').quat.tolist(),
@@ -131,7 +133,8 @@ def build_scene(robot_path, config_path):
                               rgba='.35 .37 .4 1', contype='0', conaffinity='0', density='0')
         # Optical roll changes image orientation while the housing stays across the wrist.
         roll = math.radians(config.get('wrist_camera_roll_degrees', 0)) / 2 if wrist_camera else 0
-        ET.SubElement(body, 'camera', name=name, fovy=str(config['camera_fovy']),
+        fovy = config.get('overhead_camera_fovy', config['camera_fovy']) if name == 'overhead' else config['camera_fovy']
+        ET.SubElement(body, 'camera', name=name, fovy=str(fovy),
                       quat=vector([math.cos(roll), 0, 0, math.sin(roll)]))
 
     camera(world, 'overhead', config['overhead_position'],

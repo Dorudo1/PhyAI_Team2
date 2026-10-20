@@ -87,9 +87,12 @@ ARG APP=example
 # Keep only what decides the installed dependencies, in the same layout. The dependency layers below are
 # cached on this content, so a code change doesn't reinstall (or re-ship) them; only editing these files does.
 COPY apps/${APP} /tmp/app
-RUN mkdir /deps && cd /tmp/app \
+COPY src /tmp/shared
+RUN mkdir -p /deps/app && cd /tmp/app \
     && find . \( -name package.xml -o -name COLCON_IGNORE -o -name AMENT_IGNORE -o -name CATKIN_IGNORE \
-                 -o -path ./requirements.txt -o -path ./install_system_deps.sh \) -exec cp --parents {} /deps/ \;
+                 -o -path ./requirements.txt -o -path ./install_system_deps.sh \) -exec cp --parents {} /deps/app/ \; \
+    && mkdir /deps/shared && cd /tmp/shared \
+    && find . -name package.xml -exec cp --parents {} /deps/shared/ \;
 
 # ---------------------------------------------------------------------------
 FROM base AS app-deps
@@ -98,7 +101,7 @@ FROM base AS app-deps
 # These installed system/Python packages are inherited by both build and runtime stages.
 RUN --mount=type=bind,from=deps,source=/deps,target=/tmp/deps \
     apt-get update \
-    && cd /tmp/deps \
+    && cd /tmp/deps/app \
     && if [ -f install_system_deps.sh ]; then bash -eo pipefail install_system_deps.sh; fi \
     && if [ -f requirements.txt ]; then pip3 install --no-cache-dir -r requirements.txt; fi \
     && rm -rf /var/lib/apt/lists/*
@@ -116,6 +119,7 @@ RUN --mount=type=bind,from=deps,source=/deps,target=/tmp/deps \
     && rm -rf /var/lib/apt/lists/*
 
 COPY apps/${APP} src/${APP}
+COPY src src/shared
 RUN . /opt/ros/${ROS_DISTRO}/setup.sh \
     && colcon build --merge-install --cmake-args -DCMAKE_BUILD_TYPE=Release
 

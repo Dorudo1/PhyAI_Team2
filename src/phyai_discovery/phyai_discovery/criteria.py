@@ -3,6 +3,23 @@ from dataclasses import dataclass
 import math
 
 
+def inspection_targets(tracks, assessment):
+    """Compact measured targets; never assumes a known total object count."""
+    reports = {block['id']: block for block in (assessment or {}).get('blocks', [])}
+    result = []
+    for track in tracks:
+        report = reports.get(track['id'])
+        if track['id'] is not None and report and report['meets_criteria']:
+            continue
+        priority = (3 if track['id'] is None else 2 if not track['resolved'] or
+                    (report and not report['checks']['resolved_views']) else 1)
+        result.append({'id': track['id'] or track['hypothesis_id'],
+                       'position': list(track['position']), 'size': list(track['size']),
+                       'priority': priority,
+                       'supporting_views': track.get('supporting_views', [])})
+    return result
+
+
 @dataclass(frozen=True)
 class SearchCriteria:
     min_explored_fraction: float = .90

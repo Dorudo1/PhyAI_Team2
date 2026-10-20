@@ -10,10 +10,12 @@ camera / recording adapter -> Capture -> Discovery -> workspace + search result
                             optional SAM2 -> measured depth geometry
 
 integrated app: discovery -> planning -> safeguard -> execution
+junh test app:  discovery + ROS transport + MuJoCo scan driver + workspace viewer
 ```
 
-The final integrated app owns stage ordering, camera synchronization, robot motion,
-and the lifetime of each feature. Create one `Discovery` per scan session and reuse
+The final integrated app owns stage ordering and the lifetime of each feature.
+Camera synchronization and scan movement can be delegated to the shared ROS
+adapter and its optional PIPER scan controller, or supplied by the app. Create one `Discovery` per scan session and reuse
 it for all captures so SAM2 loads once. `reset()` starts a new inventory session
 without reloading the model. Changes to calibration or the static scene require a
 new scan. Detection remains limited to the existing overhead/wrist camera roles,
@@ -30,8 +32,8 @@ For installations where the camera can see the floor or multiple horizontal
 surfaces, configure `detector.table_height_range: [zmin, zmax]` in metres in the
 map frame. The interval restricts the measured points used to estimate the table;
 it never supplies a plane when depth support is missing. Multiple substantial
-parallel surfaces within that interval remain ambiguous. For a calibrated
-map-frame tabletop at Z = 0, `[-0.005, 0.005]` is an example interval; adapters
+parallel surfaces within that interval remain ambiguous. The MuJoCo adapter uses
+`[-0.005, 0.005]` because its world-frame tabletop is at Z = 0. Hardware adapters
 must supply their own measured interval or exclude background with a camera ROI.
 
 Resolved pose bounds include sampling, measured table fit error, and configurable
@@ -47,12 +49,19 @@ within their measurement bounds; replaying one view cannot settle a conflict.
 
 ## Install
 
-For ROS applications, add `<exec_depend>phyai_discovery</exec_depend>` to the
+For live ROS cameras, use the shared
+[`phyai_discovery_ros` adapter](../phyai_discovery_ros/README.md), which launches
+without the Junh app or MuJoCo. Its optional shared PIPER scan controller can
+execute configured survey/reserve poses, or the consuming app can own motion. Camera
+intrinsics can come from CameraInfo or the adapter's versioned
+[JSON calibration files](../phyai_discovery_ros/README.md#json-camera-intrinsics).
+
+For Python-based ROS applications, add `<exec_depend>phyai_discovery</exec_depend>` to the
 consumer's `package.xml`. From the colcon workspace:
 
 ```bash
 source /opt/ros/humble/setup.bash
-colcon build --symlink-install --packages-select phyai_discovery
+colcon build --symlink-install --packages-up-to phyai_discovery
 source install/setup.bash
 ```
 
@@ -125,7 +134,7 @@ failed detection jobs before re-raising their exception.
 
 `snapshot()` returns the existing `workspace` and `search` envelope. ROS/app
 metadata such as `input_mode`, stream ages, and simulator restart IDs belongs to
-adapters.
+adapters. Existing `/junh/discovery` consumers continue to receive their envelope.
 
 | Field | Meaning for the next pipeline stage |
 | --- | --- |
@@ -140,10 +149,17 @@ adapters.
 
 A finished sequence may produce partial results. Planning must inspect uncertainty
 and scan outcome; discovery alone does not authorize picking or bypass safeguard.
+The existing `junh_master.handoff.Master` remains a prototype consumer in the test app.
+
+For inter-app retrieval after a ROS scan, use
+[`GetBlockInfo`](../phyai_discovery_ros/README.md#query-block-information-after-discovery).
+Its state metadata distinguishes an ongoing search from a finished complete,
+partial or failed inventory.
 
 ## SAM2 configuration
 
-Supply the checkpoint path through the feature config:
+Supply the checkpoint path through the feature config. Other apps need not source
+`junh` scripts or use its environment variable:
 
 ```python
 feature = Discovery({
@@ -155,13 +171,16 @@ feature = Discovery({
 })
 ```
 
-Omit segmentation or set `backend: depth` to use measured depth alone. An
-application that enables SAM2 must install PyTorch and SAM2 in its runtime,
-provide a checkpoint, and inject its path through this config.
+Omit segmentation or set `backend: depth` to use measured depth alone. For the
+current pinned SAM2 installation recipe, see
+[`apps/junh/setup_sam2.sh`](../../apps/junh/setup_sam2.sh). Its existing environment
+and checkpoint remain at `apps/junh/.venv-sam2` and `apps/junh/.models`; this
+refactor does not move or download model files. The integrated app can provision
+one shared runtime/checkpoint and inject its path into the same config.
 
 ## Recorded captures
 
-Replay measured captures with the standalone package:
+Replay measured captures without installing the junh app:
 
 ```bash
 python3 -m phyai_discovery.recording /path/to/scan.json --output /tmp/snapshots.jsonl
@@ -174,13 +193,14 @@ The installed Python command `replay_scan` runs the same implementation.
 From the repository root:
 
 ```bash
-PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 PYTHONPATH=src/phyai_discovery \
-  python3 -m pytest -q src/phyai_discovery/test
+PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 PYTHONPATH=src/phyai_discovery:src/phyai_discovery_ros:apps/junh \
+  python3 -m pytest -q src/phyai_discovery/test src/phyai_discovery_ros/test apps/junh/test
 ```
 
 With MuJoCo and a working EGL renderer installed, prefix that command with
 `MUJOCO_GL=egl` to include randomized rendered-depth tests with a visible floor,
 multiple camera positions, stable identities, and checks against ground truth.
 
-Actual SAM2 tests additionally require PyTorch, SAM2, and a checkpoint; set
-`PHYAI_DISCOVERY_TEST_SAM2_CHECKPOINT` to the checkpoint path to enable them.
+Source ROS and a built workspace to include ROS adapter tests. Actual SAM2 tests
+additionally require the local SAM2 environment and checkpoint, as documented in
+[`apps/junh/README.md`](../../apps/junh/README.md).

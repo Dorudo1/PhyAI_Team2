@@ -1,4 +1,4 @@
-"""Exercise the public discovery contract independently of an adapter."""
+"""Exercise the public feature contract without importing the junh test app."""
 import json
 from dataclasses import replace
 

@@ -1,13 +1,26 @@
 """Additional observations are bounded, measurable, and preserve identity."""
 from dataclasses import replace
 
-from phyai_discovery.criteria import SearchCriteria
+from phyai_discovery.criteria import SearchCriteria, inspection_targets
 from phyai_discovery.perception import Detector, DetectorConfig
 from phyai_discovery.search import Search, SearchState
 from phyai_discovery.workspace import Workspace
 from test_discovery import image_capture
 
 BLOCKS=[(.1,0.,.075,.025,.015,0.)]
+
+
+def test_inspection_targets_exclude_satisfied_blocks_and_prioritize_hypotheses():
+    tracks=[{'id':'good','position':[.1,0,.01],'size':[.075,.025,.015],'resolved':True},
+            {'id':'weak','position':[.2,0,.01],'size':[.075,.025,.015],'resolved':True},
+            {'id':None,'hypothesis_id':'new','position':[.3,0,.01],
+             'size':[.075,.025,.015],'resolved':False}]
+    report={'blocks':[{'id':'good','meets_criteria':True},
+                      {'id':'weak','meets_criteria':False,'checks':{'resolved_views':False}}]}
+    targets=inspection_targets(tracks,report)
+    assert [t['id'] for t in targets]==['weak','new']
+    assert targets[1]['priority']>targets[0]['priority']
+    assert targets[0]['position']==tracks[1]['position']
 
 
 def accept(search, detector, camera, stamp, viewpoint):

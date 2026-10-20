@@ -1,0 +1,21 @@
+<?xml version="1.0"?>
+<package format="3">
+  <name>phyai_discovery_ros</name>
+  <version>0.1.0</version>
+  <description>Shared RGB-D discovery transport and optional PIPER scan execution.</description>
+  <maintainer email="junhjang@keti.re.kr">PhyAI Team2</maintainer>
+  <license>Apache-2.0</license>
+  <exec_depend>phyai_discovery</exec_depend>
+  <exec_depend>phyai_discovery_interfaces</exec_depend>
+  <exec_depend>rclpy</exec_depend>
+  <exec_depend>sensor_msgs</exec_depend>
+  <exec_depend>std_msgs</exec_depend>
+  <exec_depend>std_srvs</exec_depend>
+  <exec_depend>tf2_ros</exec_depend>
+  <exec_depend>ament_index_python</exec_depend>
+  <exec_depend>python3-numpy</exec_depend>
+  <exec_depend>launch</exec_depend>
+  <exec_depend>launch_ros</exec_depend>
+  <test_depend>python3-pytest</test_depend>
+  <export><build_type>ament_python</build_type></export>
+</package>

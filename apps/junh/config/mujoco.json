@@ -1,0 +1,315 @@
+{
+  "map_frame": "world",
+  "viewpoints": [
+    "survey_1",
+    "survey_2",
+    "survey_3",
+    "survey_4",
+    "survey_5",
+    "survey_6",
+    "survey_7",
+    "survey_8",
+    "survey_9",
+    "survey_10",
+    "survey_11"
+  ],
+  "scope": [
+    -0.8405,
+    0.8405,
+    -0.5405,
+    0.5405
+  ],
+  "cell_size": 0.02,
+  "capture_timeout": 30.0,
+  "max_retries": 2,
+  "input_max_age": 1.0,
+  "stationary_seconds": 0.5,
+  "stationary_tolerance": 0.003,
+  "feedback_timeout": 1.0,
+  "detector": {
+    "table_height_range": [
+      -0.005,
+      0.005
+    ],
+    "exclusion_boxes": [
+      [
+        -10,
+        -10,
+        -10,
+        -0.83,
+        10,
+        10
+      ],
+      [
+        0.83,
+        -10,
+        -10,
+        10,
+        10,
+        10
+      ],
+      [
+        -10,
+        -10,
+        -10,
+        10,
+        -0.53,
+        10
+      ],
+      [
+        -10,
+        0.53,
+        -10,
+        10,
+        10,
+        10
+      ],
+      [
+        -10,
+        -10,
+        -10,
+        10,
+        10,
+        -0.05
+      ]
+    ],
+    "known_block_size": [
+      0.075,
+      0.025,
+      0.015
+    ]
+  },
+  "cameras": {
+    "overhead": {
+      "depth_topic": "/overhead/depth/image_rect_raw",
+      "info_topic": "/overhead/depth/camera_info",
+      "depth_scale": 0.001,
+      "roi": null,
+      "mask": null,
+      "rgb_topic": "/overhead/color/image_rect_raw",
+      "calibration_revision": "installation_v1",
+      "rectified": true,
+      "mask_topic": "/overhead/robot_mask"
+    },
+    "wrist": {
+      "depth_topic": "/wrist/depth/image_rect_raw",
+      "info_topic": "/wrist/depth/camera_info",
+      "depth_scale": 0.001,
+      "roi": null,
+      "mask": null,
+      "rgb_topic": "/wrist/color/image_rect_raw",
+      "calibration_revision": "installation_v1",
+      "rectified": true,
+      "mask_topic": "/wrist/robot_mask"
+    }
+  },
+  "sim_scan": {
+    "targeted_inspection": true,
+    "max_targeted_views_per_block": 2,
+    "approach_seconds": 2.0,
+    "move_seconds": 0.8,
+    "settle_seconds": 0.25,
+    "targets": {
+      "survey_1": [
+        -2.4862275,
+        0.4145129,
+        -1.0164504,
+        -0.3278159,
+        1.1528077,
+        0.0,
+        0.0
+      ],
+      "survey_2": [
+        -2.1083601,
+        0.1327922,
+        -1.154291,
+        -0.2724289,
+        1.2144324,
+        0.0,
+        0.0
+      ],
+      "survey_3": [
+        -1.7005347,
+        0.1169518,
+        -0.9428013,
+        0.0958843,
+        1.156628,
+        0.0,
+        0.0
+      ],
+      "survey_4": [
+        -1.3941034,
+        0.5572529,
+        -1.1674489,
+        -0.1410696,
+        1.1913115,
+        0.0,
+        0.0
+      ],
+      "survey_5": [
+        -0.10862,
+        0.2620865,
+        -1.0166608,
+        -0.2402526,
+        1.1861495,
+        0.0,
+        0.0
+      ],
+      "survey_6": [
+        0.0346979,
+        0.5336564,
+        -1.1811392,
+        0.3444136,
+        1.1561965,
+        0.0,
+        0.0
+      ],
+      "survey_7": [
+        0.4025186,
+        0.1605458,
+        -0.9723539,
+        0.3692151,
+        1.2068792,
+        0.0,
+        0.0
+      ],
+      "survey_8": [
+        0.5983196,
+        0.5489779,
+        -1.0909778,
+        -0.1328112,
+        1.109078,
+        0.0,
+        0.0
+      ],
+      "survey_9": [
+        0.9599798,
+        0.2209812,
+        -1.0875799,
+        -0.3688187,
+        1.189315,
+        0.0,
+        0.0
+      ],
+      "survey_10": [
+        2.1771623,
+        0.443752,
+        -0.8308526,
+        -0.1002688,
+        1.1817756,
+        0.0,
+        0.0
+      ],
+      "survey_11": [
+        2.2126027,
+        0.0398203,
+        -0.746659,
+        0.2553185,
+        1.2193708,
+        0.0,
+        0.0
+      ],
+      "inspection_1": [
+        0.6380013,
+        0.00868,
+        -0.6803376,
+        0.3911083,
+        1.2152995,
+        0.0,
+        0.0
+      ],
+      "inspection_2": [
+        0.624767,
+        0.0162484,
+        -0.593319,
+        0.0051703,
+        1.14184,
+        0.0,
+        0.0
+      ],
+      "inspection_3": [
+        0.4408451,
+        0.0899337,
+        -0.8865164,
+        0.1249542,
+        1.0084681,
+        0.0,
+        0.0
+      ],
+      "inspection_4": [
+        0.3359732,
+        0.5149454,
+        -1.2291114,
+        -0.3905941,
+        1.1507112,
+        0.0,
+        0.0
+      ],
+      "inspection_5": [
+        -0.9786876,
+        0.2362566,
+        -0.6795636,
+        0.071857,
+        1.1364641,
+        0.0,
+        0.0
+      ],
+      "inspection_6": [
+        -1.2600035,
+        0.5515988,
+        -1.0314894,
+        -0.380957,
+        1.0952842,
+        0.0,
+        0.0
+      ],
+      "inspection_7": [
+        -2.2843667,
+        0.0397573,
+        -0.6116794,
+        0.1098679,
+        1.2101951,
+        0.0,
+        0.0
+      ],
+      "inspection_8": [
+        -2.4864082,
+        0.2605321,
+        -0.5970573,
+        -0.4080084,
+        1.1894908,
+        0.0,
+        0.0
+      ]
+    },
+    "max_joint_speed": 1.2,
+    "max_joint_acceleration": 3.0
+  },
+  "sim_camera_request_topic": "sim/camera_request",
+  "segmentation": {
+    "backend": "sam2",
+    "checkpoint": "${JUNH_SAM2_CHECKPOINT}",
+    "device": "cuda",
+    "min_score": 0.7
+  },
+  "inspection_rounds": [
+    [
+      "inspection_1",
+      "inspection_2",
+      "inspection_3",
+      "inspection_4",
+      "inspection_5",
+      "inspection_6",
+      "inspection_7",
+      "inspection_8"
+    ]
+  ],
+  "search_criteria": {
+    "min_explored_fraction": 0.9,
+    "min_resolved_views": 2,
+    "max_position_uncertainty": 0.01,
+    "max_yaw_uncertainty": 0.08726646259971647,
+    "min_coverage_gain": 0.005,
+    "max_no_progress_rounds": 1
+  }
+}

@@ -88,6 +88,7 @@ def test_camera_rigidly_follows_casing_not_gripper_roll(editor):
 
 
 def test_arm_overhead_and_block_edits(editor):
+    overhead_fov = float(editor.model.camera('overhead').fovy[0])
     blocks = copy.deepcopy(editor.config['block_positions'])
     blocks[0] = [.22, -.12]
     untouched = editor.data.body('block_2').xpos.copy()
@@ -100,6 +101,32 @@ def test_arm_overhead_and_block_edits(editor):
     np.testing.assert_allclose(editor.data.body('block_1').xpos[:2], blocks[0])
     np.testing.assert_allclose(editor.data.body('block_2').xpos, untouched)
     assert editor.model.camera('wrist').fovy[0] == 70
+    assert editor.model.camera('overhead').fovy[0] == overhead_fov
+
+
+def test_overhead_fov_is_independent_and_persists(editor):
+    original_wrist_fov = float(editor.model.camera('wrist').fovy[0])
+    editor.action('preview', {'changes': {'overhead_camera_fovy': 80}})
+    assert editor.model.camera('overhead').fovy[0] == 80
+    assert editor.model.camera('wrist').fovy[0] == original_wrist_fov
+    editor.action('save', {'changes': {}})
+    assert json.loads(editor.path.read_text())['overhead_camera_fovy'] == 80
+    editor.action('revert', {})
+    assert editor.model.camera('overhead').fovy[0] == 80
+    editor.action('preview', {'changes': {'camera_fovy': 60}})
+    assert editor.model.camera('wrist').fovy[0] == 60
+    assert editor.model.camera('overhead').fovy[0] == 80
+
+
+def test_legacy_shared_fov_remains_supported(editor):
+    old_config = copy.deepcopy(editor.config)
+    old_config.pop('overhead_camera_fovy')
+    old_config['camera_fovy'] = 65
+    editor.path.write_text(json.dumps(old_config))
+    editor.action('reload', {})
+    assert 'overhead_camera_fovy' not in editor.config
+    assert editor.model.camera('wrist').fovy[0] == 65
+    assert editor.model.camera('overhead').fovy[0] == 65
 
 
 @pytest.mark.parametrize('changes', [
@@ -107,6 +134,7 @@ def test_arm_overhead_and_block_edits(editor):
     {'wrist_camera_position': [float('nan'), 0, 0]},
     {'wrist_camera_position': [1, 2]},
     {'camera_fovy': 0}, {'camera_fovy': True},
+    {'overhead_camera_fovy': 151}, {'overhead_camera_fovy': float('nan')},
     {'table_size': [1, 1]}, {'block_positions': []}])
 def test_invalid_edits_are_atomic(editor, changes):
     config = copy.deepcopy(editor.config)

@@ -10,8 +10,9 @@ from phyai_discovery.perception import Detector, DetectorConfig
 from phyai_discovery.segmentation import SAM2Segmenter
 from phyai_discovery.workspace import Workspace
 
-CHECKPOINT = os.environ.get('PHYAI_DISCOVERY_TEST_SAM2_CHECKPOINT')
-pytestmark = pytest.mark.skipif(not CHECKPOINT, reason='Set PHYAI_DISCOVERY_TEST_SAM2_CHECKPOINT for real SAM 2 inference')
+CHECKPOINT = (os.environ.get('PHYAI_DISCOVERY_TEST_SAM2_CHECKPOINT')
+              or os.environ.get('JUNH_TEST_SAM2_CHECKPOINT'))
+pytestmark = pytest.mark.skipif(not CHECKPOINT, reason='Set PHYAI_DISCOVERY_TEST_SAM2_CHECKPOINT (or JUNH_TEST_SAM2_CHECKPOINT) for real SAM 2 inference')
 
 
 @pytest.mark.parametrize('angles', [(0.,.35,-.65),(.2,-.3,.8,-.5,.1)])
