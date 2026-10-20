@@ -1,0 +1,14 @@
+{
+  "version": 1,
+  "frame_id": "overhead_optical",
+  "calibration_revision": "example_replace_with_measured_calibration",
+  "intrinsics": {
+    "width": 640,
+    "height": 480,
+    "fx": 600.0,
+    "fy": 600.0,
+    "cx": 319.5,
+    "cy": 239.5
+  },
+  "distortion": []
+}

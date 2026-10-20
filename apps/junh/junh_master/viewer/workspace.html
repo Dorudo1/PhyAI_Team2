@@ -2,12 +2,13 @@
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Discovered workspace</title>
 <style>
 :root{color-scheme:dark;font-family:system-ui,sans-serif;background:#111820;color:#e6edf3}body{margin:0}header{padding:18px 24px;border-bottom:1px solid #324251;display:flex;align-items:center;gap:20px}h1{font-size:21px;margin:0}button,a{color:#e6edf3;background:#233747;padding:8px 12px;border:1px solid #526779;border-radius:6px;cursor:pointer;text-decoration:none}main{display:grid;grid-template-columns:minmax(0,1fr) 310px;gap:16px;padding:18px}canvas{width:100%;height:70vh;background:#101820;border:1px solid #324251;border-radius:10px;touch-action:none}aside{background:#1a2632;border-radius:10px;padding:16px;overflow-wrap:anywhere}.muted{color:#a6b8c8;font-size:13px}.legend{display:flex;flex-wrap:wrap;gap:15px;margin:10px 0}.dot{display:inline-block;width:10px;height:10px;border-radius:2px;margin-right:5px}.row{margin:12px 0}pre{white-space:pre-wrap;font-size:12px}#status{color:#8bd9b1}#error{color:#ffb17b}@media(max-width:800px){main{grid-template-columns:1fr}canvas{height:55vh}}
+table{width:100%;border-collapse:collapse;font-size:12px}th,td{text-align:left;vertical-align:top;padding:7px 3px;border-bottom:1px solid #324251}tbody tr{cursor:pointer}tbody tr:hover{background:#233747}
 </style></head><body>
 <header><h1>Discovered workspace</h1><button id="fit">Fit map</button><a id="sim" href="#" hidden>Simulator</a></header>
 <main><section><p id="status">Waiting for discovery…</p><p id="error"></p><canvas id="map" aria-label="Estimated workspace and coverage, top-down"></canvas>
 <div class="legend"><span><i class="dot" style="background:#319d68"></i>Observed table surface</span><span><i class="dot" style="background:#e4a440"></i>Uncertain</span><span><i class="dot" style="background:#526170"></i>Unobserved</span><span><i class="dot" style="background:#9874af"></i>Stale</span><span><i class="dot" style="background:#539fe9"></i>Confirmed block</span><span><i class="dot" style="background:#ff8854"></i>Provisional / uncertain</span></div>
 <p class="muted">Top-down estimate in the app's coordinate frame. Drag to pan, scroll to zoom, click a block for details. These are camera-derived estimates. A partial map does not certify free space or picking readiness.</p></section>
-<aside><h2>Search and map</h2><div id="summary"></div><h2>Selected candidate</h2><pre id="detail">Click a block fit.</pre></aside></main>
+<aside><h2>Search and map</h2><div id="summary"></div><h2>Final block inventory</h2><div id="block-info" class="muted">Waiting for search to finish.</div><div id="block-list"></div><h2>Selected candidate</h2><pre id="detail">Click a block fit.</pre></aside></main>
 <script>
 const canvas=document.getElementById('map'),ctx=canvas.getContext('2d');
 let data=null,age=0,selected=null,scale=300,center=[0,0],fittedSession=null,drag=null,packetReceived=performance.now(),hits=[];
@@ -26,6 +27,18 @@ function draw(){if(document.hidden)return;const dpr=devicePixelRatio||1,W=canvas
  document.getElementById('error').textContent=data.last_error||'';
  const summary=document.getElementById('summary');summary.replaceChildren();
  for(const text of [`Frame: ${w.frame}`,`Map revision: ${w.revision}`,`Session: ${w.session_id}`,`Confirmed blocks: ${w.tracks.length}; provisional hypotheses: ${(w.hypotheses||[]).length}`,`Observed table surface: ${(w.coverage.observed_fraction*100).toFixed(1)}%`,`Explored scope (table + objects): ${((w.coverage.explored_fraction??w.coverage.observed_fraction)*100).toFixed(1)}%`,`Inspection round: ${data.search.inspection_round||0} / ${data.search.inspection_round_limit||0}`,`Observation criteria: ${data.search.assessment?(data.search.assessment.met?'met':'unmet'):'not configured'}`,`Captures: ${data.search.accepted} accepted / ${data.search.rejected} rejected`,`Outcome: ${data.search.result?.status||'in progress'}`,`Table: ${w.table?'plane estimated; boundary incomplete':'unknown'}`,`Publisher age: ${(age+elapsed).toFixed(1)} s`]){const el=document.createElement('div');el.className='row';el.textContent=text;summary.append(el)}
+ const info=data.block_info;
+ document.getElementById('block-info').textContent=info?.status==='ready'?`GetBlockInfo · ${info.search_status} · ${info.frame_id} · revision ${info.revision}`:(info?.message||'Waiting for search to finish.');
+ const list=document.getElementById('block-list');list.replaceChildren();
+ if(info?.status==='ready'){
+  if(!info.blocks.length){list.textContent='No confirmed blocks.'}
+  else{const table=document.createElement('table'),head=table.createTHead().insertRow();
+   for(const label of ['Block','Position (m)','Yaw (°)']){const th=document.createElement('th');th.textContent=label;head.append(th)}
+   const body=table.createTBody();for(const block of info.blocks){const row=body.insertRow(),[qw,qx,qy,qz]=block.quaternion,yaw=Math.atan2(2*(qw*qz+qx*qy),1-2*(qy*qy+qz*qz))*180/Math.PI;
+    for(const value of [block.id,block.position.map(n=>n.toFixed(3)).join(', '),yaw.toFixed(1)])row.insertCell().textContent=value;
+    row.onclick=()=>{selected=block.id;draw()};
+   }list.append(table)}
+ }
  const assessment=data.search.assessment;
  if(assessment){for(const text of [`Scope target: ${(assessment.min_explored_fraction*100).toFixed(1)}%`,`Resolved views per block: ≥ ${assessment.min_resolved_views}`,`Position bound: ≤ ${(assessment.max_position_uncertainty*1000).toFixed(1)} mm`,`Yaw bound: ≤ ${(assessment.max_yaw_uncertainty*180/Math.PI).toFixed(1)}°`,...assessment.reasons]){const el=document.createElement('div');el.className='row';el.textContent=text;summary.append(el)}}
  if(selected){const t=[...w.tracks,...(w.hypotheses||[])].find(t=>(t.id||t.hypothesis_id)===selected);document.getElementById('detail').textContent=t?`Identity: ${t.identity_state||(t.id?'confirmed':'provisional')}

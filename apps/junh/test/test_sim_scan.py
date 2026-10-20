@@ -8,6 +8,7 @@ rclpy=pytest.importorskip('rclpy')
 from rclpy.parameter import Parameter
 from junh_master.ros.sim_scan import SimScanNode, move_duration, simulator_only, smooth_target
 from junh_master.ros import sim_scan as module
+from phyai_discovery_ros import scan as shared_module
 
 
 def test_interpolation_stays_between_endpoints():
@@ -40,6 +41,7 @@ def test_capture_requested_once_while_discovery_progress_is_delayed(monkeypatch)
     node=SimScanNode(parameter_overrides=[Parameter('config_path',value=str(Path(__file__).parents[1]/'config/mujoco.json'))])
     try:
         monkeypatch.setattr(module,'time',SimpleNamespace(monotonic=lambda:100.))
+        monkeypatch.setattr(shared_module,'time',SimpleNamespace(monotonic=lambda:100.))
         node.get_subscriptions_info_by_topic=lambda topic:[SimpleNamespace(node_name='piper_mujoco_sim')]
         target=next(iter(node.targets));node.actual=list(node.targets[target])
         node.scene={'paused':False,'simulation_time':1.,'robot':{'joints':[{'limits':[-3.,3.]} for _ in range(6)]}}
@@ -115,6 +117,7 @@ def test_no_reachable_target_ends_inspection_once_without_moving(monkeypatch):
     node=SimScanNode(parameter_overrides=[Parameter('config_path',value=str(Path(__file__).parents[1]/'config/mujoco.json'))])
     try:
         monkeypatch.setattr(module,'time',SimpleNamespace(monotonic=lambda:100.))
+        monkeypatch.setattr(shared_module,'time',SimpleNamespace(monotonic=lambda:100.))
         node.get_subscriptions_info_by_topic=lambda topic:[SimpleNamespace(node_name='piper_mujoco_sim')]
         node.scene={'scan_geometry':{'available':True},'paused':False}
         node.actual=list(node.targets['inspection_1'])

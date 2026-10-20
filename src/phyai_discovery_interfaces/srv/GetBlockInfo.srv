@@ -1,0 +1,17 @@
+# Empty block_id returns the complete inventory; otherwise select one confirmed ID.
+string block_id
+# Optional expected scan session; a mismatch is rejected.
+string session_id
+---
+bool success
+string message
+# Same state values as search.state, including search_finished.
+string discovery_state
+bool finished
+string session_id
+uint64 revision
+string frame_id
+# Empty until finished, then complete, partial, or failed.
+string search_status
+# Existing workspace/search JSON envelope. Empty when success is false.
+string snapshot_json

@@ -17,11 +17,13 @@ from rclpy.time import Time
 from sensor_msgs.msg import CameraInfo, Image, JointState
 from std_msgs.msg import String
 from std_srvs.srv import Trigger
+from phyai_discovery_interfaces.srv import GetBlockInfo
 from tf2_ros import Buffer, TransformListener, TransformException
 
 from phyai_discovery.observations import Capture, Intrinsics, decode_depth, load_capture, load_manifest
 from phyai_discovery import Discovery, SearchState, Stationarity
 from phyai_discovery.criteria import inspection_targets
+from .calibration import load_calibration
 
 
 def transform_matrix(msg):
@@ -53,6 +55,13 @@ class DiscoveryNode(Node):
             manifest,self.recording_base = load_manifest(recording)
             self.recording_entries = manifest['captures']
             self.config.update(map_frame=manifest['map_frame'],viewpoints=manifest['viewpoints'],scope=manifest.get('scope'))
+        file_calibrations = {}
+        if not recording:
+            for camera, cfg in self.config['cameras'].items():
+                if cfg.get('intrinsics_file'):
+                    info, revision = load_calibration(config_path.parent/cfg['intrinsics_file'])
+                    file_calibrations[camera] = info
+                    cfg['calibration_revision'] = revision
         self.sim_restart_id = None
         self.recording_index = 0
         feature_config = dict(self.config)
@@ -64,7 +73,7 @@ class DiscoveryNode(Node):
         self.detector = self.discovery.detector
         self.stationarity = Stationarity(self.config.get('stationary_seconds',.5),
             self.config.get('stationary_tolerance',.003),self.config.get('feedback_timeout',1.))
-        self.info = {}
+        self.info = file_calibrations
         self.rgb = {}
         self.overlay_pubs = {camera:self.create_publisher(Image,f'{interface_prefix}/{camera}/overlay',1)
                              for camera in ('overhead','wrist')}
@@ -81,6 +90,9 @@ class DiscoveryNode(Node):
         self.data_pub = self.create_publisher(String,f'{interface_prefix}/{inventory_name}',1)
         self.progress_pub = self.create_publisher(String,f'{interface_prefix}/search_progress',1)
         self.camera_request_pub = self.create_publisher(String,self.config['sim_camera_request_topic'],1) if self.config.get('sim_camera_request_topic') and self.recording_entries is None else None
+        self.state_pub=self.create_publisher(String,f'{interface_prefix}/state',
+            QoSProfile(depth=1,durability=DurabilityPolicy.TRANSIENT_LOCAL))
+        self.create_service(GetBlockInfo,f'{interface_prefix}/get_block_info',self.get_block_info)
         self.create_service(Trigger,f'{interface_prefix}/capture',self.capture_service)
         self.create_service(Trigger,f'{interface_prefix}/restart_scan',self.restart_service)
         self.create_service(Trigger,f'{interface_prefix}/finish_scan',self.finish_service)
@@ -104,14 +116,49 @@ class DiscoveryNode(Node):
                 if cfg.get('rgb_topic'):
                     self.create_subscription(Image,cfg['rgb_topic'],
                         lambda msg,camera=camera:self.on_rgb(camera,msg),sensor_qos)
-                self.create_subscription(CameraInfo,cfg['info_topic'],
-                    lambda msg,camera=camera:self.on_info(camera,msg),sensor_qos)
+                if not cfg.get('intrinsics_file') and cfg.get('info_topic'):
+                    self.create_subscription(CameraInfo,cfg['info_topic'],
+                        lambda msg,camera=camera:self.on_info(camera,msg),sensor_qos)
                 self.create_subscription(Image,cfg['depth_topic'],
                     lambda msg,camera=camera:self.on_depth(camera,msg),sensor_qos)
         self.create_timer(.05,self.tick)
         self.create_timer(.2,self.publish_progress)
         self.create_timer(1.,self.publish)
         self.get_logger().info(f'Discovery awaits {interface_prefix}/capture requests from the app after verified settling.')
+
+    @property
+    def discovery_state(self):
+        return self.search.state.value
+
+    def state_info(self):
+        result=self.search.result
+        return {'discovery_state':self.discovery_state,
+                'finished':self.search.state==SearchState.FINISHED,
+                'session_id':self.workspace.session,'revision':self.workspace.revision,
+                'frame_id':self.workspace.frame,
+                'search_status':result['status'] if result else ''}
+
+    def get_block_info(self,request,response):
+        for name,value in self.state_info().items():
+            setattr(response,name,value)
+        if request.session_id and request.session_id!=response.session_id:
+            response.message='Discovery session changed; query the current session.'
+            return response
+        if not response.finished:
+            response.message='Discovery is still running; block inventory is not final.'
+            return response
+        snapshot=self.discovery.snapshot()
+        if request.block_id:
+            tracks=[block for block in snapshot['workspace']['tracks'] if block['id']==request.block_id]
+            if not tracks:
+                response.message='Unknown confirmed block ID: '+request.block_id
+                return response
+            snapshot['workspace']['tracks']=tracks
+            snapshot['workspace']['hypotheses']=[]
+        response.snapshot_json=json.dumps(snapshot,allow_nan=False)
+        response.success=True
+        response.message='Block information available; inspect search_status and pose uncertainty.'
+        return response
 
     def on_sim_scene(self,msg):
         try:
@@ -153,7 +200,8 @@ class DiscoveryNode(Node):
         self.rgb[camera] = (Time.from_msg(msg.header.stamp).nanoseconds/1e9,msg.header.frame_id,rgb)
 
     def on_info(self,camera,msg):
-        self.info[camera] = msg
+        if not self.config['cameras'][camera].get('intrinsics_file'):
+            self.info[camera] = msg
 
     def on_depth(self,camera,msg):
         now = time.monotonic()
@@ -319,6 +367,7 @@ class DiscoveryNode(Node):
         self.overlay_pubs[capture.camera].publish(msg)
 
     def publish_progress(self):
+        self.state_pub.publish(String(data=json.dumps(self.state_info())))
         mode='live' if self.recording_entries is None else 'recorded'
         self.progress_pub.publish(String(data=json.dumps({
             'workspace':{'session_id':self.workspace.session,

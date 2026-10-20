@@ -13,8 +13,9 @@ integrated app: discovery -> planning -> safeguard -> execution
 junh test app:  discovery + ROS transport + MuJoCo scan driver + workspace viewer
 ```
 
-The final integrated app owns stage ordering, camera synchronization, robot motion,
-and the lifetime of each feature. Create one `Discovery` per scan session and reuse
+The final integrated app owns stage ordering and the lifetime of each feature.
+Camera synchronization and scan movement can be delegated to the shared ROS
+adapter and its optional PIPER scan controller, or supplied by the app. Create one `Discovery` per scan session and reuse
 it for all captures so SAM2 loads once. `reset()` starts a new inventory session
 without reloading the model. Changes to calibration or the static scene require a
 new scan. Detection remains limited to the existing overhead/wrist camera roles,
@@ -50,7 +51,10 @@ within their measurement bounds; replaying one view cannot settle a conflict.
 
 For live ROS cameras, use the shared
 [`phyai_discovery_ros` adapter](../phyai_discovery_ros/README.md), which launches
-without the Junh app or MuJoCo and leaves motion to the consuming app.
+without the Junh app or MuJoCo. Its optional shared PIPER scan controller can
+execute configured survey/reserve poses, or the consuming app can own motion. Camera
+intrinsics can come from CameraInfo or the adapter's versioned
+[JSON calibration files](../phyai_discovery_ros/README.md#json-camera-intrinsics).
 
 For Python-based ROS applications, add `<exec_depend>phyai_discovery</exec_depend>` to the
 consumer's `package.xml`. From the colcon workspace:
@@ -146,6 +150,11 @@ adapters. Existing `/junh/discovery` consumers continue to receive their envelop
 A finished sequence may produce partial results. Planning must inspect uncertainty
 and scan outcome; discovery alone does not authorize picking or bypass safeguard.
 The existing `junh_master.handoff.Master` remains a prototype consumer in the test app.
+
+For inter-app retrieval after a ROS scan, use
+[`GetBlockInfo`](../phyai_discovery_ros/README.md#query-block-information-after-discovery).
+Its state metadata distinguishes an ongoing search from a finished complete,
+partial or failed inventory.
 
 ## SAM2 configuration
 

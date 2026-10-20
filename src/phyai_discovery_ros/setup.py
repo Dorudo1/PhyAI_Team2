@@ -12,7 +12,8 @@ setup(
         ('share/phyai_discovery_ros/config', glob('config/*.json')),
     ],
     install_requires=['setuptools'],
-    entry_points={'console_scripts': ['discovery = phyai_discovery_ros.node:main']},
+    entry_points={'console_scripts': ['discovery = phyai_discovery_ros.node:main',
+                                         'scan = phyai_discovery_ros.scan:main']},
     description='Shared RGB-D discovery ROS adapter for calibrated cameras and PIPER feedback',
     license='Apache-2.0',
 )

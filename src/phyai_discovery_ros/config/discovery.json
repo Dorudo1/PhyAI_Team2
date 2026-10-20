@@ -22,6 +22,7 @@
   "cameras": {
     "overhead": {
       "depth_topic": "/overhead/depth/image_rect_raw",
+      "intrinsics_file": null,
       "info_topic": "/overhead/depth/camera_info",
       "depth_scale": 0.001,
       "roi": null,
@@ -32,6 +33,7 @@
     },
     "wrist": {
       "depth_topic": "/wrist/depth/image_rect_raw",
+      "intrinsics_file": null,
       "info_topic": "/wrist/depth/camera_info",
       "depth_scale": 0.001,
       "roi": null,

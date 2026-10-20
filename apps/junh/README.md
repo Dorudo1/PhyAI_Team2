@@ -554,3 +554,12 @@ Junh keeps its `discovery` executable and `/junh/*` interfaces through a compati
 entry point. Other apps can launch the shared package without this app, viewer,
 master, MuJoCo, or SAM2. `run_sim.sh` builds the shared adapter automatically;
 rebuild once before using `--no-build` with an older workspace install.
+
+The browser queries `/junh/get_block_info` after the search finishes and displays
+confirmed IDs, positions and yaw in **Final block inventory**. Query state and
+scan revision are shown alongside the outcome. The live map continues updating
+during search; restarting a scan clears the queried inventory. See the shared
+[GetBlockInfo contract](../../src/phyai_discovery_ros/README.md#query-block-information-after-discovery).
+
+Rebuild once before using `--no-build`: `phyai_discovery_interfaces` generates the
+new ROS service type and must be installed and sourced alongside the app.

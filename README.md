@@ -110,9 +110,11 @@ ros2 launch phyai_discovery_ros discovery.launch.py config_path:=/absolute/path/
 ```
 
 Copy the shared package's configuration template and set your measured camera,
-table, and sensor error settings first. Your app owns robot motion and requests
-captures after moving to each requested viewpoint. The MuJoCo scan driver and its
-joint targets are simulator-specific. The shared adapter is available for hardware
+table, and sensor error settings first. Enable `auto_scan:=true` with configured
+scan poses to let the shared PIPER controller move and capture, or have your app
+own movement and request captures. Junh adds simulator-specific geometry planning
+to the shared scan controller; physical scan poses and paths still require
+installation validation. The shared adapter is available for hardware
 integration; real-sensor accuracy and hardware trajectories still need validation.
 
 ### Dependencies and installed files

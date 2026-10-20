@@ -135,6 +135,8 @@ def test_recorded_nodes_publish_to_master_and_viewer(ros,tmp_path):
     discovery=DiscoveryNode(parameter_overrides=[Parameter('config_path',value=str(config_file(tmp_path))),
                                                 Parameter('recording_path',value=str(manifest))])
     master=MasterNode();viewer=ViewerNode();ros.extend([discovery,master,viewer])
+    from junh_master.viewer.web import WorkspaceWeb
+    viewer.web=WorkspaceWeb(0)
     markers=[]
     master.create_subscription(MarkerArray,'junh/workspace_markers',lambda msg:markers.append(msg),1)
     executor=SingleThreadedExecutor()
@@ -143,13 +145,22 @@ def test_recorded_nodes_publish_to_master_and_viewer(ros,tmp_path):
     try:
         while time.monotonic()<deadline:
             executor.spin_once(timeout_sec=.05)
-            if master.master.state=='waiting_for_model' and viewer.latest is not None and viewer.latest['search']['result'] and markers:
+            if master.master.state=='waiting_for_model' and viewer.latest is not None and viewer.latest['search']['result'] and viewer.latest['block_info']['status']=='ready' and markers:
                 break
         assert discovery.search.state==SearchState.FINISHED
         assert master.master.observation.search_status=='partial'
         assert len(master.master.observation.tracks)==2
         assert viewer.latest['workspace']['revision']==master.master.observation.revision
         assert viewer.latest['search']['result']['pick_ready'] is False
+        assert viewer.latest['block_info']['status']=='ready'
+        assert len(viewer.latest['block_info']['blocks'])==2
+        from urllib.request import urlopen
+        port=viewer.web.server.server_address[1]
+        with urlopen(f'http://127.0.0.1:{port}/api/workspace',timeout=2) as response:
+            displayed=json.load(response)['snapshot']['block_info']
+        assert displayed['status']=='ready' and len(displayed['blocks'])==2
+        assert all('position' in block and 'quaternion' in block for block in displayed['blocks'])
+        assert viewer.latest['block_info']['session_id']==viewer.latest['workspace']['session_id']
         assert any(marker.type==marker.CUBE for marker in markers[-1].markers)
         assert all(marker.header.frame_id=='base_link' for marker in markers[-1].markers if marker.action!=marker.DELETEALL)
     finally:
@@ -245,3 +256,34 @@ def test_simulator_restart_clears_map_and_old_capture_results(ros,tmp_path):
     new_session=node.workspace.session
     node.on_sim_scene(String(data=json.dumps({'restart_id':0})))
     assert node.workspace.session==new_session
+
+
+def test_viewer_discards_pending_query_and_inventory_on_restart(ros):
+    node=ViewerNode();ros.append(node)
+    first=envelope()
+    node.on_workspace(String(data=json.dumps(first)))
+    old_key=node.block_key
+    cancelled=[]
+    node.block_query=SimpleNamespace(cancel=lambda:cancelled.append(True))
+    new=envelope()
+    new['search']['state']='capture_overhead'
+    new['search']['result']=None
+    node.on_workspace(String(data=json.dumps(new)))
+    assert cancelled and node.block_key is None and node.block_query is None
+    assert node.latest['block_info']['status']=='waiting'
+    assert 'blocks' not in node.latest['block_info']
+    assert node.latest['workspace']['session_id']!=old_key[0]
+
+
+def test_viewer_rejects_block_info_from_another_scan(ros):
+    from phyai_discovery_interfaces.srv import GetBlockInfo
+    node=ViewerNode();ros.append(node)
+    data=envelope()
+    node.on_workspace(String(data=json.dumps(data)))
+    response=GetBlockInfo.Response(success=True,finished=True,session_id='old-session',
+                                  revision=data['workspace']['revision'],snapshot_json=json.dumps(data))
+    node.block_query=SimpleNamespace(done=lambda:True,result=lambda:response)
+    node.block_client=SimpleNamespace(service_is_ready=lambda:False)
+    node.query_block_info()
+    assert node.latest['block_info']['status']=='error'
+    assert 'blocks' not in node.latest['block_info']
