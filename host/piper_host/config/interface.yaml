@@ -1,0 +1,19 @@
+# 우리 토픽(왼쪽) ↔ 팀 README 로봇 인터페이스(오른쪽) 대응. README 가 바뀌면 이 파일만 고친다.
+readme_bridge:
+  ros__parameters:
+    # 팔
+    slave_state_topic: /slave/joint_states_single   # 슬레이브 드라이버 (joint1~6 rad, gripper = 전체 벌림 m)
+    state_topic: /joint_states                      # README: joint1~8, joint7 = 폭/2, joint8 = -폭/2
+    command_topic: /joint_ctrl_single               # README: joint1~6 rad, joint7 = 폭/2 (0~0.035 m)
+    bridge_topic: /policy/joint_cmd                 # 안전 브리지(piper-follow) 입력. 슬레이브로 직접 보내지 않음
+    # 카메라: README 이름 = 우리 카메라
+    overhead_source: cam2                           # 천장 고정
+    wrist_source: cam1                              # 슬레이브 손목
+    # 좌표계
+    world_frame: world                              # 실제 작업대 원점은 안 쟀음 → base_link 와 같은 위치로 둠
+    base_frame: base_link                           # = 드라이버 end_pose 기준 (URDF FK 와 0.05 mm 이내)
+    flange_frame: link6                             # URDF 손목 끝 링크
+    # 펌웨어 end_pose 는 link6 이 아니라 link6 기준 이 위치(m, 회전 없음)의 점이다 (2026-10-22 실측: 슬레이브 (-17.7, 0.05, 15.2) mm,
+    # 마스터 (-16.6, 0.9, 16.9) mm, 방향 차 0.02° 이하). 손목 카메라 캘리브레이션은 end_pose 기준이라 이만큼 옮겨 붙인다.
+    end_pose_in_flange: [-0.01766, 0.00005, 0.01516]
+    calibration_file: ~/piper_test/data/calib/calibration.json

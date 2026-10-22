@@ -1,0 +1,19 @@
+<?xml version="1.0"?>
+<package format="3">
+  <name>piper_host</name>
+  <version>0.1.0</version>
+  <description>제어 PC 호스트: 실제 Piper · RealSense 토픽을 PhyAI_Team2 README 로봇 인터페이스(/joint_states, /joint_ctrl_single, /overhead, /wrist, tf, /robot_description)로 내보낸다.</description>
+  <maintainer email="pjh5148@keti.re.kr">physical_ai_team2</maintainer>
+  <license>Apache-2.0</license>
+  <exec_depend>rclpy</exec_depend>
+  <exec_depend>sensor_msgs</exec_depend>
+  <exec_depend>geometry_msgs</exec_depend>
+  <exec_depend>tf2_ros</exec_depend>
+  <exec_depend>robot_state_publisher</exec_depend>
+  <exec_depend>piper_description</exec_depend>
+  <exec_depend>python3-numpy</exec_depend>
+  <exec_depend>python3-scipy</exec_depend>
+  <export>
+    <build_type>ament_python</build_type>
+  </export>
+</package>
