@@ -26,6 +26,9 @@ PhyAI_Team2 README 의 "로봇 인터페이스" 표와 같은 이름 · 단위�
 ros2 launch piper_host host.launch.py
 ```
 
+**ROS 도메인**: 실제 로봇은 `ROS_DOMAIN_ID=10` (제어 PC `~/.bashrc`). 시뮬레이터(42~)와 섞이지 않는다. 팀원 앱도 같은 번호로 실행:
+`ROS_DOMAIN_ID=10 bash scripts/run_runtime.sh <앱>`.
+
 **팔을 움직이려면** 다른 터미널에서 `piper-follow` 를 켜고 Enter. 안전 브리지가 범위 제한 · 끊김 정지 · 종료 시 복귀를 맡는다.
 piper-follow 가 꺼져 있으면 `/joint_ctrl_single` 명령은 어디에도 가지 않는다 (팔 안 움직임).
 
